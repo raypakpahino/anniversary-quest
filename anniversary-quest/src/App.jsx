@@ -167,7 +167,6 @@ export default function App() {
       130.81, 146.83, 155.56, 174.61, 155.56, 146.83, 130.81, 116.54,
       130.81, 155.56, 174.61, 196.00, 174.61, 155.56, 130.81, 98.00
     ];
-    // Bright, joyful victory celebration melody
     const melodyVictory = [
       523.25, 659.25, 783.99, 1046.50, 783.99, 659.25, 523.25, 587.33,
       659.25, 783.99, 880.00, 1046.50, 880.00, 783.99, 659.25, 587.33
@@ -203,7 +202,6 @@ export default function App() {
     animRef.current.floatingTexts.push({ text, x, y, color, life: 40 });
   };
 
-  // Calibrated smooth needle oscillation loop (50% slower, gentler travel)
   useEffect(() => {
     if (!showNeedleMinigame) return;
     let pos = 50;
@@ -709,7 +707,6 @@ export default function App() {
         setQteStep(null);
         resolveTurn(pendingAction, true);
       } else {
-        // Start Injustice Guided Swipe Sequence (Begins with LEFT)
         startDirectionalSwipe('LEFT');
       }
     }
@@ -723,7 +720,7 @@ export default function App() {
     setTouchStartPos(null);
 
     const startTime = Date.now();
-    const duration = 3000; // 3.0s window per swipe
+    const duration = 3000;
 
     if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
 
@@ -754,7 +751,7 @@ export default function App() {
     const diffY = clientY - touchStartPos.y;
     setTouchStartPos(null);
 
-    const threshold = 35; // Minimum drag distance
+    const threshold = 35;
     let detectedDirection = null;
 
     if (Math.abs(diffX) > Math.abs(diffY)) {
@@ -903,7 +900,6 @@ export default function App() {
         setBattleLog("💀 Team HP hit 0! You were defeated...");
         setTimeout(() => setGameState('gameover'), 700);
       } else if (remainingHp <= 35) {
-        // Triggers EVERY time health is critical
         setIsTurnLocked(true);
         setTimeout(() => {
           playSound(440, 'sine', 0.2);
@@ -920,7 +916,6 @@ export default function App() {
     if (needleAnimRef.current) cancelAnimationFrame(needleAnimRef.current);
     setShowNeedleMinigame(false);
 
-    // Expanded sweet spot: 30% to 70%
     const isSuccess = needlePos >= 30 && needlePos <= 70;
 
     if (isSuccess) {
@@ -1199,29 +1194,28 @@ export default function App() {
                 style={{ imageRendering: 'pixelated' }}
               />
 
-              {/* Sound Toggle */}
-              <div className="absolute top-2 right-2 z-40">
+              {/* Top Left: Stage Badge + Sound Toggle Group */}
+              <div className="absolute top-2 left-2 z-40 flex items-center gap-1.5">
+                <div className="bg-black/80 border border-slate-700 px-2 py-1 rounded-md font-pixel text-[7.5px] text-yellow-300 shadow-md">
+                  STAGE {phase}/3 {phase === 3 ? '🌧️' : ''}
+                </div>
                 <button
                   onClick={() => {
                     initAudio();
                     setIsMuted(!isMuted);
                   }}
-                  className="p-1 rounded-full bg-black/60 border border-slate-700 text-pink-300 hover:text-white backdrop-blur-md"
+                  className="p-1 rounded-md bg-black/80 border border-slate-700 text-pink-300 hover:text-white backdrop-blur-md shadow-md"
+                  title={isMuted ? "Unmute" : "Mute"}
                 >
                   {isMuted ? <VolumeX size={12} /> : <Volume2 size={12} className="text-yellow-300" />}
                 </button>
               </div>
 
-              {/* Stage Badge */}
-              <div className="absolute top-2 left-2 bg-black/80 border border-slate-700 px-2 py-0.5 rounded-md font-pixel text-[7.5px] text-yellow-300">
-                STAGE {phase}/3 {phase === 3 ? '🌧️' : ''}
-              </div>
-
-              {/* Boss HP Bar */}
-              <div className="absolute top-2 right-10 bg-black/85 border border-slate-700 p-1.5 rounded-lg w-36 shadow-lg">
-                <div className="flex justify-between font-pixel text-[7.5px] text-pink-300 mb-0.5">
-                  <span className="truncate max-w-[80px]">{currentBoss.name}</span>
-                  <span>{bossHp}%</span>
+              {/* Top Right: Full Uncropped Boss Health Card */}
+              <div className="absolute top-2 right-2 bg-black/85 border border-slate-700 p-1.5 px-2 rounded-lg min-w-[150px] shadow-lg z-30">
+                <div className="flex justify-between items-center gap-2 font-pixel text-[7.5px] text-pink-300 mb-0.5 whitespace-nowrap">
+                  <span className="tracking-tight">{currentBoss.name}</span>
+                  <span className="text-[7px] text-slate-300">{bossHp}%</span>
                 </div>
                 <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                   <div 
