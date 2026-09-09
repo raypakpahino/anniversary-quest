@@ -3,7 +3,7 @@ import confetti from 'canvas-confetti';
 import { 
   Trophy, Sparkles, HelpCircle, X, ArrowRight, 
   ShieldCheck, Zap, RefreshCw, Award, AlertTriangle, 
-  Skull, HeartPulse, Volume2, VolumeX, Heart, ArrowLeft, ArrowUp
+  Skull, HeartPulse, Volume2, VolumeX, Heart, ArrowLeft, ArrowUp, ArrowDown
 } from 'lucide-react';
 
 export default function App() {
@@ -29,7 +29,7 @@ export default function App() {
   const [mashCount, setMashCount] = useState(0);
   const [mashTimer, setMashTimer] = useState(100);
 
-  // Injustice-Style Directional Swipe Chain: 'LEFT' | 'RIGHT' | 'UP'
+  // Injustice-Style Directional Swipe Chain: 'LEFT' | 'RIGHT' | 'UP_OR_DOWN'
   const [requiredSwipe, setRequiredSwipe] = useState('LEFT');
   const [swipeTimer, setSwipeTimer] = useState(100);
   const [touchStartPos, setTouchStartPos] = useState(null);
@@ -152,7 +152,7 @@ export default function App() {
     notes.forEach((n, i) => setTimeout(() => playSound(n, 'sine', 0.28), i * 100));
   };
 
-  // Background Music Loop: Upgraded with Happy Victory Chiptune
+  // Background Music Loop
   useEffect(() => {
     if (isMuted || gameState === 'landing' || gameState === 'gameover') {
       if (bgmIntervalRef.current) clearInterval(bgmIntervalRef.current);
@@ -228,7 +228,7 @@ export default function App() {
     const targetX = 58;
     const targetY = -70;
     const startTime = Date.now();
-    const duration = 420;
+    const duration = 400;
 
     const animInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
@@ -707,17 +707,18 @@ export default function App() {
         setQteStep(null);
         resolveTurn(pendingAction, true);
       } else {
+        // Start Level 3 Combo with Swipe Left
         startDirectionalSwipe('LEFT');
       }
     }
   };
 
-  // ================= INJUSTICE-STYLE GUIDED SWIPES =================
+  // ================= INJUSTICE-STYLE DIRECTIONAL SWIPES WITH ANIMATIONS =================
   const startDirectionalSwipe = (direction) => {
-    setQteStep('swipe');
     setRequiredSwipe(direction);
     setSwipeTimer(100);
     setTouchStartPos(null);
+    setQteStep('swipe'); // Show the pop up only now
 
     const startTime = Date.now();
     const duration = 3000;
@@ -731,7 +732,7 @@ export default function App() {
 
       if (remainingPct <= 0) {
         clearInterval(subQteTimerRef.current);
-        handleQTEFailed(`TIME OUT ON ${direction} SWIPE!`);
+        handleQTEFailed(`TIME OUT ON ${direction === 'UP_OR_DOWN' ? 'FINISHER' : direction} SWIPE!`);
       }
     }, 20);
   };
@@ -752,36 +753,62 @@ export default function App() {
     setTouchStartPos(null);
 
     const threshold = 35;
-    let detectedDirection = null;
+    let swipeMatched = false;
 
-    if (Math.abs(diffX) > Math.abs(diffY)) {
-      if (diffX < -threshold) detectedDirection = 'LEFT';
-      else if (diffX > threshold) detectedDirection = 'RIGHT';
-    } else {
-      if (diffY < -threshold) detectedDirection = 'UP';
+    if (requiredSwipe === 'LEFT') {
+      if (Math.abs(diffX) > Math.abs(diffY) && diffX < -threshold) swipeMatched = true;
+    } else if (requiredSwipe === 'RIGHT') {
+      if (Math.abs(diffX) > Math.abs(diffY) && diffX > threshold) swipeMatched = true;
+    } else if (requiredSwipe === 'UP_OR_DOWN') {
+      if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > threshold) swipeMatched = true;
     }
 
-    if (detectedDirection === requiredSwipe) {
+    if (swipeMatched) {
       if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
+      // Immediately close pop-up so full attack visual is visible!
+      setQteStep(null);
       executeSwipeSuccess(requiredSwipe);
     }
   };
 
   const executeSwipeSuccess = (currentDir) => {
     if (currentDir === 'LEFT') {
+      // 1. Charisse charges & hits
       playSound(680, 'triangle', 0.15);
-      addFloatingText("COMBO x1! 💥", 40, 130, '#38bdf8');
-      animatePlayerAttack('p1', () => {});
-      startDirectionalSwipe('RIGHT');
+      setBossFlash(true);
+      setTimeout(() => setBossFlash(false), 120);
+      addFloatingText("CHARISSE STRIKE! 💥", 40, 130, '#f472b6');
+      setBattleLog("⚔️ Charisse lunges forward with a starlight strike!");
+      
+      animatePlayerAttack('p1', () => {
+        // After Charisse finishes returning, trigger prompt 2
+        setTimeout(() => {
+          startDirectionalSwipe('RIGHT');
+        }, 150);
+      });
+
     } else if (currentDir === 'RIGHT') {
+      // 2. Ray charges & hits
       playSound(780, 'triangle', 0.15);
-      addFloatingText("COMBO x2! 🔥", 55, 125, '#f472b6');
-      animatePlayerAttack('p2', () => {});
-      startDirectionalSwipe('UP');
-    } else if (currentDir === 'UP') {
+      setBossFlash(true);
+      setTimeout(() => setBossFlash(false), 120);
+      addFloatingText("RAY CROSS-SLASH! 🔥", 55, 125, '#38bdf8');
+      setBattleLog("⚡ Ray dashes in with a piercing cross-slash!");
+
+      animatePlayerAttack('p2', () => {
+        // After Ray finishes returning, trigger prompt 3
+        setTimeout(() => {
+          startDirectionalSwipe('UP_OR_DOWN');
+        }, 150);
+      });
+
+    } else if (currentDir === 'UP_OR_DOWN') {
+      // 3. Final together strike!
       playSound(920, 'triangle', 0.25);
-      addFloatingText("AIR FINISHER! ⚡", 45, 120, '#facc15');
-      setQteStep(null);
+      addFloatingText("DUAL SKY FINISHER! ⚡", 45, 115, '#facc15');
+      setBattleLog("🌟 Charisse & Ray execute their synchronized team finisher!");
+      
+      // Full power resolution with screen shake
       resolveTurn(pendingAction, true);
     }
   };
@@ -802,7 +829,7 @@ export default function App() {
     setIsTurnLocked(true);
     const isEffective = actionKey === currentBoss.weakness;
 
-    animatePlayerAttack('p1', () => {
+    animatePlayerAttack('both', () => {
       if (!isEffective) {
         playSound(200, 'sawtooth', 0.15);
         addFloatingText("BLOCKED!", 100, 35, '#94a3b8');
@@ -813,9 +840,13 @@ export default function App() {
       }
 
       setBossFlash(true);
-      setTimeout(() => setBossFlash(false), 120);
+      setScreenShake(true);
+      setTimeout(() => {
+        setBossFlash(false);
+        setScreenShake(false);
+      }, 350);
 
-      const baseDmg = isCrit ? 50 : 35;
+      const baseDmg = isCrit ? 55 : 35;
       playSound(isCrit ? 700 : 500, 'triangle', 0.15);
       addFloatingText(isCrit ? `CRIT! -${baseDmg}` : `-${baseDmg}`, 95, 30, isCrit ? '#f43f5e' : '#facc15');
 
@@ -1167,7 +1198,7 @@ export default function App() {
               <div className="text-[11px] text-slate-300 space-y-2 leading-relaxed">
                 <p>🎯 <b>LEVEL 1:</b> Tap circle before it shrinks!</p>
                 <p>💓 <b>LEVEL 2:</b> Tap circle + rapidly mash button to fill heart!</p>
-                <p>🪄 <b>LEVEL 3 (INJUSTICE SWIPES):</b> Follow the directional arrows (Swipe Left ➔ Right ➔ Up)! You have 3 seconds per swipe.</p>
+                <p>🪄 <b>LEVEL 3 (INJUSTICE SWIPES):</b> Follow the directional prompts. Each prompt disappears the moment you swipe, showing the strike animation before the next prompt!</p>
                 <p>🩹 <b>CRITICAL HEALING:</b> Whenever Team HP falls below 35%, stop the needle in the large green zone to trigger a +50 HP quiz!</p>
               </div>
 
@@ -1320,14 +1351,14 @@ export default function App() {
                 </div>
               )}
 
-              {/* Step 3: Injustice Guided Directional Swipe */}
+              {/* Step 3: Directional Swipes (Disappears immediately when swiped) */}
               {qteStep === 'swipe' && (
                 <div 
                   onTouchStart={handlePointerDown}
                   onTouchEnd={handlePointerUp}
                   onMouseDown={handlePointerDown}
                   onMouseUp={handlePointerUp}
-                  className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/65 backdrop-blur-[1px] p-3 cursor-grab"
+                  className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[1px] p-3 cursor-grab"
                 >
                   <div className="bg-slate-900 border-2 border-cyan-400 rounded-2xl p-4 flex flex-col items-center max-w-[270px] w-full text-center shadow-2xl pointer-events-none animate-fade-in">
                     <span className="font-pixel text-[8px] text-yellow-300 mb-1">INJUSTICE COMBO FINISHER</span>
@@ -1346,16 +1377,17 @@ export default function App() {
                           <ArrowRight size={34} className="animate-bounce" />
                         </div>
                       )}
-                      {requiredSwipe === 'UP' && (
+                      {requiredSwipe === 'UP_OR_DOWN' && (
                         <div className="flex items-center gap-2 text-amber-400 animate-pulse">
-                          <ArrowUp size={34} className="animate-bounce" />
-                          <span className="font-pixel text-xs tracking-wider text-white">SWIPE UP!</span>
+                          <ArrowUp size={28} className="animate-bounce" />
+                          <ArrowDown size={28} className="animate-bounce" />
+                          <span className="font-pixel text-xs tracking-wider text-white">SWIPE UP OR DOWN!</span>
                         </div>
                       )}
                     </div>
 
                     <p className="text-[10px] text-cyan-200/90 mb-2">
-                      {requiredSwipe === 'LEFT' ? '1/3: Charisse Lunge' : requiredSwipe === 'RIGHT' ? '2/3: Ray Duo Cross-Slash' : '3/3: Sky Launch Finisher!'}
+                      {requiredSwipe === 'LEFT' ? '1/3: Charisse Solo Lunge' : requiredSwipe === 'RIGHT' ? '2/3: Ray Cross-Slash' : '3/3: Synchronized Final Strike!'}
                     </p>
 
                     {/* 3-Second Timer Bar */}
