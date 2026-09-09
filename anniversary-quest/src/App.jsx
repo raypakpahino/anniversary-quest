@@ -3,7 +3,7 @@ import confetti from 'canvas-confetti';
 import { 
   Trophy, Sparkles, HelpCircle, X, ArrowRight, 
   ShieldCheck, Zap, RefreshCw, Award, AlertTriangle, 
-  Skull, HeartPulse, Volume2, VolumeX, Heart
+  Skull, HeartPulse, Volume2, VolumeX, Heart, ArrowLeft, ArrowUp
 } from 'lucide-react';
 
 export default function App() {
@@ -24,19 +24,21 @@ export default function App() {
   const [finalBossIntro, setFinalBossIntro] = useState(false);
 
   // Multi-tier QTE Attack Sequence States
-  const [qteStep, setQteStep] = useState(null);
+  const [qteStep, setQteStep] = useState(null); // 'timed' | 'mash' | 'swipe' | null
   const [qteScale, setQteScale] = useState(2.3);
   const [mashCount, setMashCount] = useState(0);
   const [mashTimer, setMashTimer] = useState(100);
-  const [swipeCount, setSwipeCount] = useState(0);
+
+  // Injustice-Style Directional Swipe Chain: 'LEFT' | 'RIGHT' | 'UP'
+  const [requiredSwipe, setRequiredSwipe] = useState('LEFT');
   const [swipeTimer, setSwipeTimer] = useState(100);
+  const [touchStartPos, setTouchStartPos] = useState(null);
+
   const [pendingAction, setPendingAction] = useState(null);
-  const [lastTouchX, setLastTouchX] = useState(null);
 
   // Critical Health Mini-Game & Trivia States
   const [showNeedleMinigame, setShowNeedleMinigame] = useState(false);
   const [needlePos, setNeedlePos] = useState(50);
-  const [hasTriggeredReviveThisPhase, setHasTriggeredReviveThisPhase] = useState(false);
   const [showTriviaModal, setShowTriviaModal] = useState(false);
   const [currentTriviaIndex, setCurrentTriviaIndex] = useState(0);
 
@@ -140,19 +142,19 @@ export default function App() {
       osc.start();
       osc.stop(ctx.currentTime + dur);
     } catch {
-      // Audio safety
+      // Audio fallback safety
     }
   };
 
   const playFanfare = () => {
     if (isMuted) return;
-    const notes = [261.6, 329.6, 392.0, 523.2, 659.2];
-    notes.forEach((n, i) => setTimeout(() => playSound(n, 'sine', 0.25), i * 110));
+    const notes = [261.6, 329.6, 392.0, 523.2, 659.2, 783.99];
+    notes.forEach((n, i) => setTimeout(() => playSound(n, 'sine', 0.28), i * 100));
   };
 
-  // Background Music Loop
+  // Background Music Loop: Upgraded with Happy Victory Chiptune
   useEffect(() => {
-    if (isMuted || gameState === 'landing') {
+    if (isMuted || gameState === 'landing' || gameState === 'gameover') {
       if (bgmIntervalRef.current) clearInterval(bgmIntervalRef.current);
       return;
     }
@@ -165,14 +167,30 @@ export default function App() {
       130.81, 146.83, 155.56, 174.61, 155.56, 146.83, 130.81, 116.54,
       130.81, 155.56, 174.61, 196.00, 174.61, 155.56, 130.81, 98.00
     ];
+    // Bright, joyful victory celebration melody
+    const melodyVictory = [
+      523.25, 659.25, 783.99, 1046.50, 783.99, 659.25, 523.25, 587.33,
+      659.25, 783.99, 880.00, 1046.50, 880.00, 783.99, 659.25, 587.33
+    ];
 
     let noteIndex = 0;
-    const notes = phase === 3 ? melodyBoss3 : melodyBattle;
-    const tempo = phase === 3 ? 150 : 200;
+    let notes = melodyBattle;
+    let tempo = 200;
+    let waveType = 'triangle';
+
+    if (gameState === 'victory') {
+      notes = melodyVictory;
+      tempo = 140;
+      waveType = 'sine';
+    } else if (phase === 3) {
+      notes = melodyBoss3;
+      tempo = 150;
+      waveType = 'sawtooth';
+    }
 
     bgmIntervalRef.current = setInterval(() => {
       const note = notes[noteIndex % notes.length];
-      playSound(note, phase === 3 ? 'sawtooth' : 'triangle', 0.12, 0.001);
+      playSound(note, waveType, 0.12, 0.001);
       noteIndex++;
     }, tempo);
 
@@ -185,19 +203,20 @@ export default function App() {
     animRef.current.floatingTexts.push({ text, x, y, color, life: 40 });
   };
 
+  // Calibrated smooth needle oscillation loop (50% slower, gentler travel)
   useEffect(() => {
     if (!showNeedleMinigame) return;
     let pos = 50;
-    let dir = 1.6;
+    let dir = 0.9;
 
     const loop = () => {
-      pos += dir * 2.8;
-      if (pos >= 96) {
-        pos = 96;
-        dir = -1.6;
-      } else if (pos <= 4) {
-        pos = 4;
-        dir = 1.6;
+      pos += dir * 1.5;
+      if (pos >= 94) {
+        pos = 94;
+        dir = -0.9;
+      } else if (pos <= 6) {
+        pos = 6;
+        dir = 0.9;
       }
       setNeedlePos(pos);
       needleAnimRef.current = requestAnimationFrame(loop);
@@ -575,7 +594,7 @@ export default function App() {
       const p1Y = 138 + animRef.current.p1Offset.y;
       drawCuteCharisse(ctx, p1X, p1Y);
 
-      // Rain on Phase 3
+      // Rain during Phase 3
       if (phase === 3) {
         ctx.strokeStyle = 'rgba(186, 230, 253, 0.45)';
         ctx.lineWidth = 1;
@@ -617,7 +636,7 @@ export default function App() {
     return () => cancelAnimationFrame(frameId);
   }, [gameState, phase, bossFlash]);
 
-  // QTE Attack Sequence
+  // ================= QTE COMBO SEQUENCE =================
   const initiateAttack = (actionKey) => {
     if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || finalBossIntro) return;
     setAttackWarning("");
@@ -690,19 +709,21 @@ export default function App() {
         setQteStep(null);
         resolveTurn(pendingAction, true);
       } else {
-        startSwipeStep();
+        // Start Injustice Guided Swipe Sequence (Begins with LEFT)
+        startDirectionalSwipe('LEFT');
       }
     }
   };
 
-  const startSwipeStep = () => {
+  // ================= INJUSTICE-STYLE GUIDED SWIPES =================
+  const startDirectionalSwipe = (direction) => {
     setQteStep('swipe');
-    setSwipeCount(0);
+    setRequiredSwipe(direction);
     setSwipeTimer(100);
-    setLastTouchX(null);
+    setTouchStartPos(null);
 
     const startTime = Date.now();
-    const duration = 2400;
+    const duration = 3000; // 3.0s window per swipe
 
     if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
 
@@ -713,44 +734,73 @@ export default function App() {
 
       if (remainingPct <= 0) {
         clearInterval(subQteTimerRef.current);
-        handleQTEFailed("NOT ENOUGH SWIPES!");
+        handleQTEFailed(`TIME OUT ON ${direction} SWIPE!`);
       }
     }, 20);
   };
 
-  const handleSwipeMove = (clientX) => {
-    if (qteStep !== 'swipe') return;
-    if (lastTouchX === null) {
-      setLastTouchX(clientX);
-      return;
+  const handlePointerDown = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    setTouchStartPos({ x: clientX, y: clientY });
+  };
+
+  const handlePointerUp = (e) => {
+    if (!touchStartPos || qteStep !== 'swipe') return;
+    const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+    const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+
+    const diffX = clientX - touchStartPos.x;
+    const diffY = clientY - touchStartPos.y;
+    setTouchStartPos(null);
+
+    const threshold = 35; // Minimum drag distance
+    let detectedDirection = null;
+
+    if (Math.abs(diffX) > Math.abs(diffY)) {
+      if (diffX < -threshold) detectedDirection = 'LEFT';
+      else if (diffX > threshold) detectedDirection = 'RIGHT';
+    } else {
+      if (diffY < -threshold) detectedDirection = 'UP';
     }
 
-    const diff = Math.abs(clientX - lastTouchX);
-    if (diff > 45) {
-      playSound(700, 'sine', 0.05);
-      setLastTouchX(clientX);
-      const nextSwipe = swipeCount + 1;
-      setSwipeCount(nextSwipe);
+    if (detectedDirection === requiredSwipe) {
+      if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
+      executeSwipeSuccess(requiredSwipe);
+    }
+  };
 
-      if (nextSwipe >= 5) {
-        if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
-        playSound(900, 'triangle', 0.2);
-        setQteStep(null);
-        resolveTurn(pendingAction, true);
-      }
+  const executeSwipeSuccess = (currentDir) => {
+    if (currentDir === 'LEFT') {
+      playSound(680, 'triangle', 0.15);
+      addFloatingText("COMBO x1! 💥", 40, 130, '#38bdf8');
+      animatePlayerAttack('p1', () => {});
+      startDirectionalSwipe('RIGHT');
+    } else if (currentDir === 'RIGHT') {
+      playSound(780, 'triangle', 0.15);
+      addFloatingText("COMBO x2! 🔥", 55, 125, '#f472b6');
+      animatePlayerAttack('p2', () => {});
+      startDirectionalSwipe('UP');
+    } else if (currentDir === 'UP') {
+      playSound(920, 'triangle', 0.25);
+      addFloatingText("AIR FINISHER! ⚡", 45, 120, '#facc15');
+      setQteStep(null);
+      resolveTurn(pendingAction, true);
     }
   };
 
   const handleQTEFailed = (reason) => {
     setQteStep(null);
+    if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
     playSound(150, 'sawtooth', 0.25);
     addFloatingText("MISS!", 40, 140, '#94a3b8');
-    setAttackWarning(`❌ ${reason} Attack failed!`);
-    setBattleLog("Charisse lost momentum! The monster charges forward!");
+    setAttackWarning(`❌ ${reason}`);
+    setBattleLog("Combo dropped! The monster counters!");
     setIsTurnLocked(true);
     setTimeout(() => bossCounterAttack(true), 700);
   };
 
+  // Turn Execution
   const resolveTurn = (actionKey, isCrit) => {
     setIsTurnLocked(true);
     const isEffective = actionKey === currentBoss.weakness;
@@ -776,9 +826,9 @@ export default function App() {
       if (actionKey === 'comm') {
         hitMsg = isCrit ? "💥 CRITICAL LOVE! Honest communication shattered the Ego!" : "💌 Heartfelt words struck home!";
       } else if (actionKey === 'food') {
-        hitMsg = isCrit ? "💥 CRITICAL FEAST! Stuffed the Goblin with juicy burgers & milk tea!" : "🍔 Fed burger & milk tea! Goblin is happy & docile!";
+        hitMsg = isCrit ? "💥 CRITICAL FEAST! Fed burger & milk tea! Goblin is docile!" : "🍔 Fed treats to the Goblin!";
       } else if (actionKey === 'hug') {
-        hitMsg = isCrit ? "💥 CRITICAL REASSURANCE! Overthinking completely melted!" : "🫂 Warm hugs dissolved the anxious spiral!";
+        hitMsg = isCrit ? "💥 3-HIT AIR FINISHER! Reassurance melted the Overthinking Phantom!" : "🫂 Warm hugs calmed the monster!";
       }
 
       const nextBossHp = Math.max(0, bossHp - baseDmg);
@@ -843,7 +893,7 @@ export default function App() {
       setScreenShake(true);
       setTimeout(() => setScreenShake(false), 300);
 
-      const damage = (isHeavyHit ? 28 : 18) + (phase * 5);
+      const damage = (isHeavyHit ? 28 : 18) + (phase * 4);
       const remainingHp = Math.max(0, playerHp - damage);
       setPlayerHp(remainingHp);
       addFloatingText(`-${damage} HP`, 35, 140, '#ef4444');
@@ -852,8 +902,8 @@ export default function App() {
         playSound(100, 'sawtooth', 0.5);
         setBattleLog("💀 Team HP hit 0! You were defeated...");
         setTimeout(() => setGameState('gameover'), 700);
-      } else if (remainingHp <= 30 && !hasTriggeredReviveThisPhase) {
-        setHasTriggeredReviveThisPhase(true);
+      } else if (remainingHp <= 35) {
+        // Triggers EVERY time health is critical
         setIsTurnLocked(true);
         setTimeout(() => {
           playSound(440, 'sine', 0.2);
@@ -870,7 +920,8 @@ export default function App() {
     if (needleAnimRef.current) cancelAnimationFrame(needleAnimRef.current);
     setShowNeedleMinigame(false);
 
-    const isSuccess = needlePos >= 38 && needlePos <= 62;
+    // Expanded sweet spot: 30% to 70%
+    const isSuccess = needlePos >= 30 && needlePos <= 70;
 
     if (isSuccess) {
       playSound(660, 'sine', 0.2);
@@ -880,7 +931,7 @@ export default function App() {
     } else {
       playSound(180, 'sawtooth', 0.3);
       addFloatingText("FAILED!", 40, 110, '#ef4444');
-      setBattleLog("⚠️ Emergency needle missed! Stay strong and keep fighting!");
+      setBattleLog("⚠️ Emergency needle missed! Stay focused!");
       setIsTurnLocked(false);
     }
   };
@@ -899,7 +950,7 @@ export default function App() {
     } else {
       playSound(160, 'sawtooth', 0.25);
       addFloatingText("WRONG ANSWER!", 30, 130, '#ef4444');
-      setBattleLog("❌ Oops, that wasn't quite right! No healing this time!");
+      setBattleLog("❌ Close, but not quite! Stay determined!");
     }
     setIsTurnLocked(false);
   };
@@ -909,8 +960,7 @@ export default function App() {
       const nextPhase = phase + 1;
       setPhase(nextPhase);
       setBossHp(100);
-      setPlayerHp((p) => Math.min(100, p + 25));
-      setHasTriggeredReviveThisPhase(false);
+      setPlayerHp((p) => Math.min(100, p + 30));
       setAttackWarning("");
 
       if (nextPhase === 3) {
@@ -933,8 +983,8 @@ export default function App() {
     } else {
       setIsTurnLocked(true);
       playFanfare();
-      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
-      setTimeout(() => setGameState('victory'), 900);
+      confetti({ particleCount: 140, spread: 90, origin: { y: 0.6 } });
+      setTimeout(() => setGameState('victory'), 800);
     }
   };
 
@@ -945,7 +995,6 @@ export default function App() {
     setSynergy(0);
     setQteStep(null);
     setFinalBossIntro(false);
-    setHasTriggeredReviveThisPhase(false);
     setShowNeedleMinigame(false);
     setShowTriviaModal(false);
     setAttackWarning("");
@@ -986,7 +1035,7 @@ export default function App() {
         {gameState === 'landing' && (
           <div className="w-full h-full flex flex-col justify-between p-3.5 sm:p-5 text-center overflow-hidden">
             
-            {/* Top Bar */}
+            {/* Top Navigation Bar */}
             <div className="w-full flex justify-between items-center shrink-0 pt-0.5">
               <span className="font-pixel text-[8px] text-pink-400 bg-pink-950/80 border border-pink-700/60 px-2.5 py-1 rounded-full">
                 MAY 9, 2026 ➔ TODAY ❤️
@@ -1028,11 +1077,11 @@ export default function App() {
                 </p>
               </div>
 
-              {/* Stacked Compact Quest Intel Card */}
+              {/* Combos Instruction Card */}
               <div className="bg-purple-950/80 border border-purple-800 rounded-xl p-2.5 w-full max-w-[340px] text-left shadow-2xl backdrop-blur-md space-y-1.5 mt-1">
                 <div className="font-pixel text-[7.5px] text-yellow-300 border-b border-purple-800/80 pb-1 flex items-center justify-between tracking-wider">
-                  <span>QUEST COMBOS</span>
-                  <span className="text-pink-300">INPUT SEQUENCE</span>
+                  <span>COMBAT COMBOS</span>
+                  <span className="text-pink-300">INJUSTICE QTE</span>
                 </div>
 
                 {/* Level 1 */}
@@ -1081,14 +1130,14 @@ export default function App() {
                     </span>
                     <span className="text-[10px] text-purple-400 font-bold">+</span>
                     <span className="font-pixel text-[6.5px] text-purple-300 bg-purple-950 border border-purple-700/70 px-1.5 py-0.5 rounded">
-                      🪄 SWIPE
+                      ⬅️ ➡️ ⬆️ SWIPES
                     </span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Bottom Button (Guaranteed Visible Above Browser Chrome) */}
+            {/* Bottom Button */}
             <div className="w-full shrink-0 pt-2 pb-1">
               <button
                 onClick={() => {
@@ -1117,14 +1166,14 @@ export default function App() {
               
               <div className="flex items-center gap-2 font-pixel text-xs text-pink-300 mb-2.5">
                 <ShieldCheck size={16} className="text-pink-400" />
-                <span>COMBO RULES</span>
+                <span>HOW TO PLAY</span>
               </div>
               
               <div className="text-[11px] text-slate-300 space-y-2 leading-relaxed">
-                <p>🎯 <b>LEVEL 1:</b> Tap the circle fast before it closes!</p>
-                <p>💓 <b>LEVEL 2:</b> Tap circle + rapidly mash button to fill heart meter!</p>
-                <p>🪄 <b>LEVEL 3:</b> Circle tap + Mash heart + rapidly swipe screen during the storm!</p>
-                <p>⚠️ Missing any step fails your turn and triggers a boss counter-attack!</p>
+                <p>🎯 <b>LEVEL 1:</b> Tap circle before it shrinks!</p>
+                <p>💓 <b>LEVEL 2:</b> Tap circle + rapidly mash button to fill heart!</p>
+                <p>🪄 <b>LEVEL 3 (INJUSTICE SWIPES):</b> Follow the directional arrows (Swipe Left ➔ Right ➔ Up)! You have 3 seconds per swipe.</p>
+                <p>🩹 <b>CRITICAL HEALING:</b> Whenever Team HP falls below 35%, stop the needle in the large green zone to trigger a +50 HP quiz!</p>
               </div>
 
               <button
@@ -1150,7 +1199,7 @@ export default function App() {
                 style={{ imageRendering: 'pixelated' }}
               />
 
-              {/* Sound Toggle (In-game) */}
+              {/* Sound Toggle */}
               <div className="absolute top-2 right-2 z-40">
                 <button
                   onClick={() => {
@@ -1186,14 +1235,14 @@ export default function App() {
               <div className="absolute bottom-2 left-2 bg-black/85 border border-slate-700 p-1.5 rounded-lg w-38 shadow-lg">
                 <div className="flex justify-between font-pixel text-[7.5px] text-emerald-400 mb-0.5">
                   <span className="flex items-center gap-1">
-                    <HeartPulse size={9} className={playerHp <= 30 ? 'text-red-400 animate-spin' : ''} />
+                    <HeartPulse size={9} className={playerHp <= 35 ? 'text-red-400 animate-spin' : ''} />
                     OUR TEAM HP
                   </span>
-                  <span className={playerHp <= 30 ? 'text-red-400 animate-pulse font-bold' : ''}>{playerHp}%</span>
+                  <span className={playerHp <= 35 ? 'text-red-400 animate-pulse font-bold' : ''}>{playerHp}%</span>
                 </div>
                 <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                   <div 
-                    className={`h-full transition-all duration-300 ${playerHp <= 30 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                    className={`h-full transition-all duration-300 ${playerHp <= 35 ? 'bg-red-500' : 'bg-emerald-500'}`}
                     style={{ width: `${playerHp}%` }}
                   />
                 </div>
@@ -1277,44 +1326,57 @@ export default function App() {
                 </div>
               )}
 
-              {/* Step 3: Rapid Swipe */}
+              {/* Step 3: Injustice Guided Directional Swipe */}
               {qteStep === 'swipe' && (
                 <div 
-                  onTouchMove={(e) => handleSwipeMove(e.touches[0].clientX)}
-                  onMouseMove={(e) => handleSwipeMove(e.clientX)}
-                  className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[1px] p-3 cursor-ew-resize"
+                  onTouchStart={handlePointerDown}
+                  onTouchEnd={handlePointerUp}
+                  onMouseDown={handlePointerDown}
+                  onMouseUp={handlePointerUp}
+                  className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/65 backdrop-blur-[1px] p-3 cursor-grab"
                 >
-                  <div className="bg-slate-900 border-2 border-purple-500 rounded-2xl p-3 flex flex-col items-center max-w-[250px] w-full text-center shadow-2xl pointer-events-none">
-                    <span className="font-pixel text-[7.5px] text-yellow-300 mb-0.5">FINAL STEP: SWIPE SLASH!</span>
-                    <p className="text-[11px] text-purple-200 mb-1.5 font-semibold">Swipe left & right rapidly in rain!</p>
-
-                    <div className="text-2xl my-0.5 animate-pulse">🪄🌧️</div>
-
-                    <div className="flex gap-1.5 my-1.5">
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <div 
-                          key={s} 
-                          className={`w-4 h-4 rounded-full border border-purple-400 flex items-center justify-center text-[8px] ${
-                            swipeCount >= s ? 'bg-purple-500 text-white' : 'bg-slate-800 text-slate-500'
-                          }`}
-                        >
-                          ✓
+                  <div className="bg-slate-900 border-2 border-cyan-400 rounded-2xl p-4 flex flex-col items-center max-w-[270px] w-full text-center shadow-2xl pointer-events-none animate-fade-in">
+                    <span className="font-pixel text-[8px] text-yellow-300 mb-1">INJUSTICE COMBO FINISHER</span>
+                    
+                    {/* Prompt with Dynamic Arrow */}
+                    <div className="flex items-center justify-center gap-2 my-2">
+                      {requiredSwipe === 'LEFT' && (
+                        <div className="flex items-center gap-2 text-cyan-300 animate-pulse">
+                          <ArrowLeft size={34} className="animate-bounce" />
+                          <span className="font-pixel text-xs tracking-wider text-white">SWIPE LEFT!</span>
                         </div>
-                      ))}
+                      )}
+                      {requiredSwipe === 'RIGHT' && (
+                        <div className="flex items-center gap-2 text-pink-400 animate-pulse">
+                          <span className="font-pixel text-xs tracking-wider text-white">SWIPE RIGHT!</span>
+                          <ArrowRight size={34} className="animate-bounce" />
+                        </div>
+                      )}
+                      {requiredSwipe === 'UP' && (
+                        <div className="flex items-center gap-2 text-amber-400 animate-pulse">
+                          <ArrowUp size={34} className="animate-bounce" />
+                          <span className="font-pixel text-xs tracking-wider text-white">SWIPE UP!</span>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden mt-1">
+                    <p className="text-[10px] text-cyan-200/90 mb-2">
+                      {requiredSwipe === 'LEFT' ? '1/3: Charisse Lunge' : requiredSwipe === 'RIGHT' ? '2/3: Ray Duo Cross-Slash' : '3/3: Sky Launch Finisher!'}
+                    </p>
+
+                    {/* 3-Second Timer Bar */}
+                    <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-1">
                       <div 
-                        className="bg-amber-400 h-full transition-all duration-75"
+                        className="bg-gradient-to-r from-red-500 via-yellow-400 to-emerald-400 h-full transition-all duration-75"
                         style={{ width: `${swipeTimer}%` }}
                       />
                     </div>
-                    <span className="font-pixel text-[6.5px] text-purple-300/80 mt-1.5">SWIPE SCREEN NOW! ➔ ⬅️</span>
+                    <span className="text-[9px] text-slate-400 font-pixel">3.0s WINDOW</span>
                   </div>
                 </div>
               )}
 
-              {/* Critical Health Mini-game */}
+              {/* Critical Health Mini-game: Calibrated & Slower */}
               {showNeedleMinigame && (
                 <div className="absolute inset-0 z-40 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-3 animate-fade-in">
                   <div className="bg-slate-900 border-2 border-red-500/90 rounded-2xl p-3.5 w-full max-w-[260px] flex flex-col items-center text-center shadow-2xl">
@@ -1322,16 +1384,17 @@ export default function App() {
                       <AlertTriangle size={11} /> CRITICAL HEALTH ALERT!
                     </span>
                     <p className="text-[11px] text-pink-100 font-semibold mb-1.5">
-                      Stop needle in green to heal!
+                      Stop the needle in the green zone to heal!
                     </p>
 
-                    <div className="relative w-10 h-36 bg-slate-950 border-2 border-slate-700 rounded-full overflow-hidden my-1 flex items-center justify-center shadow-inner">
-                      <div className="absolute top-[38%] h-[24%] w-full bg-emerald-500/30 border-y-2 border-emerald-400 flex items-center justify-center">
-                        <span className="font-pixel text-[6.5px] text-emerald-300">HEAL</span>
+                    {/* Expanded 40% Green Sweet Spot */}
+                    <div className="relative w-11 h-40 bg-slate-950 border-2 border-slate-700 rounded-full overflow-hidden my-1 flex items-center justify-center shadow-inner">
+                      <div className="absolute top-[30%] h-[40%] w-full bg-emerald-500/35 border-y-2 border-emerald-400 flex items-center justify-center">
+                        <span className="font-pixel text-[7px] text-emerald-300">HEAL</span>
                       </div>
 
                       <div 
-                        className="absolute left-0.5 right-0.5 h-2.5 bg-rose-500 border border-white rounded-full shadow-lg shadow-rose-500/80 transition-none"
+                        className="absolute left-0.5 right-0.5 h-3 bg-rose-500 border border-white rounded-full shadow-lg shadow-rose-500/80 transition-none"
                         style={{ top: `${needlePos}%` }}
                       />
                     </div>
@@ -1500,15 +1563,15 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= SCREEN 4: VICTORY & REWARD ================= */}
+        {/* ================= SCREEN 4: VICTORY & HAPPY REWARD ================= */}
         {gameState === 'victory' && (
           <div className="w-full h-full flex flex-col items-center justify-between p-3.5 text-center overflow-y-auto">
             
             <div className="w-full flex flex-col items-center pt-0.5">
-              <span className="font-pixel text-[8px] text-yellow-300 bg-yellow-950/70 border border-yellow-600/60 px-3 py-0.5 rounded-full flex items-center gap-1.5 shadow-md">
+              <span className="font-pixel text-[8px] text-yellow-300 bg-yellow-950/70 border border-yellow-600/60 px-3 py-0.5 rounded-full flex items-center gap-1.5 shadow-md animate-bounce">
                 <Trophy size={11} /> CAMPAIGN CLEARED!
               </span>
-              <h2 className="font-pixel text-xs text-pink-200 mt-1.5">LEVEL 4 RELATIONSHIP UNLOCKED</h2>
+              <h2 className="font-pixel text-xs text-pink-200 mt-1.5">LEVEL 4 RELATIONSHIP UNLOCKED ✨</h2>
               <p className="text-[10px] text-pink-300/80 mt-0.5">Happy 4-Month Anniversary, Charisse! ❤️</p>
             </div>
 
@@ -1533,7 +1596,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Romantic Anniversary Honor Certificate */}
+            {/* Commemorative Victory Scroll */}
             <div className="w-full max-w-[290px] bg-gradient-to-br from-purple-950 via-slate-900 to-pink-950 border-2 border-pink-500/80 rounded-2xl p-2.5 text-center relative overflow-hidden shadow-xl">
               <div className="flex items-center justify-between text-yellow-300 font-pixel text-[7.5px] mb-1 border-b border-pink-500/30 pb-1">
                 <span className="flex items-center gap-1"><Award size={10} /> 123 DAYS OF LOVE</span>
@@ -1547,7 +1610,7 @@ export default function App() {
               </div>
 
               <p className="text-[10.5px] text-slate-200 font-medium leading-relaxed px-1 mt-0.5">
-                Thank you for being my constant warmth, biggest cheerleader, and loving partner through everything. Here's to countless more months together!
+                Thank you for being my constant warmth, biggest cheerleader, and loving partner through everything. Here's to countless more months and adventures together!
               </p>
 
               <div className="mt-1.5 font-pixel text-[8px] text-emerald-400 bg-emerald-950/70 border border-emerald-500/60 py-1 px-1.5 rounded-lg">
