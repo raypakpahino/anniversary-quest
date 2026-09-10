@@ -4,7 +4,7 @@ import {
   Trophy, Sparkles, HelpCircle, X, ArrowRight, 
   ShieldCheck, Zap, RefreshCw, Award, AlertTriangle, 
   Skull, HeartPulse, Volume2, VolumeX, Heart, ArrowLeft, ArrowUp, ArrowDown,
-  Sun, Shield, Wind, Sparkle, Flame
+  Sun, Shield, Wind, Sparkle, Flame, Compass
 } from 'lucide-react';
 
 export default function App() {
@@ -12,7 +12,7 @@ export default function App() {
   const [showInstructions, setShowInstructions] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   
-  // Combat System (5 Stages)
+  // Combat System (5 Progressive Stages)
   const [phase, setPhase] = useState(1);
   const [bossHp, setBossHp] = useState(100);
   const [playerHp, setPlayerHp] = useState(100);
@@ -40,19 +40,28 @@ export default function App() {
   const [swipeTimer, setSwipeTimer] = useState(100);
   const [touchStartPos, setTouchStartPos] = useState(null);
 
-  // Slow-Mo Matrix Shield Parry System
+  // Friday the 13th Needle Wheel (Stage 4)
+  const [showFatalCircle, setShowFatalCircle] = useState(false);
+  const [circleAngle, setCircleAngle] = useState(0);
+  const [circleTargetAngle, setCircleTargetAngle] = useState(180);
+
+  // Slow-Mo Matrix Shield Parry System (Stage 5)
   const [showParryModal, setShowParryModal] = useState(false);
   const [parryRingScale, setParryRingScale] = useState(2.3);
 
+  // Agile Dodge Mechanic (Stages 3 & 4)
+  const [showDodgeModal, setShowDodgeModal] = useState(false);
+  const [dodgeTimer, setDodgeTimer] = useState(100);
+
   const [pendingAction, setPendingAction] = useState(null);
 
-  // Recovery & Trivia States
+  // Emergency Critical Recovery Needle & Trivia
   const [showNeedleMinigame, setShowNeedleMinigame] = useState(false);
   const [needlePos, setNeedlePos] = useState(50);
   const [showTriviaModal, setShowTriviaModal] = useState(false);
   const [currentTriviaIndex, setCurrentTriviaIndex] = useState(0);
 
-  // VFX & Animations
+  // VFX & Screenshake
   const [screenShake, setScreenShake] = useState(false);
   const [bossFlash, setBossFlash] = useState(false);
   const [activePolaroid, setActivePolaroid] = useState(0);
@@ -74,6 +83,9 @@ export default function App() {
   const qteTimerRef = useRef(null);
   const subQteTimerRef = useRef(null);
   const parryTimerRef = useRef(null);
+  const dodgeTimerRef = useRef(null);
+  const circleAnimRef = useRef(null);
+  const circleAngleRef = useRef(0);
   const needleAnimRef = useRef(null);
 
   const bosses = [
@@ -134,10 +146,10 @@ export default function App() {
     setIsSurpriseWeakness(false);
   }, [phase]);
 
-  // Rain Drops and Falling Petals Initialization
+  // Rain Drops and Falling Blossom Petals Initialization
   useEffect(() => {
     const drops = [];
-    for (let i = 0; i < 65; i++) {
+    for (let i = 0; i < 70; i++) {
       drops.push({
         x: Math.random() * 160,
         y: Math.random() * 240,
@@ -146,7 +158,7 @@ export default function App() {
       });
     }
     const petals = [];
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 45; i++) {
       petals.push({
         x: Math.random() * 160,
         y: Math.random() * 240,
@@ -185,7 +197,7 @@ export default function App() {
       osc.start();
       osc.stop(ctx.currentTime + dur);
     } catch {
-      // Audio safety
+      // Audio safety fallback
     }
   };
 
@@ -197,8 +209,8 @@ export default function App() {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(90, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 0.9);
+      osc.frequency.setValueAtTime(95, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(25, ctx.currentTime + 0.9);
       gain.gain.setValueAtTime(0.35, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.95);
       osc.connect(gain);
@@ -220,20 +232,20 @@ export default function App() {
       const gain = ctx.createGain();
       osc1.type = 'sawtooth';
       osc2.type = 'square';
-      osc1.frequency.setValueAtTime(140, ctx.currentTime);
-      osc1.frequency.linearRampToValueAtTime(850, ctx.currentTime + 0.15);
-      osc1.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.7);
-      osc2.frequency.setValueAtTime(300, ctx.currentTime);
-      osc2.frequency.linearRampToValueAtTime(1100, ctx.currentTime + 0.18);
-      gain.gain.setValueAtTime(0.32, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.75);
+      osc1.frequency.setValueAtTime(130, ctx.currentTime);
+      osc1.frequency.linearRampToValueAtTime(900, ctx.currentTime + 0.15);
+      osc1.frequency.exponentialRampToValueAtTime(45, ctx.currentTime + 0.75);
+      osc2.frequency.setValueAtTime(280, ctx.currentTime);
+      osc2.frequency.linearRampToValueAtTime(1150, ctx.currentTime + 0.18);
+      gain.gain.setValueAtTime(0.35, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
       osc1.connect(gain);
       osc2.connect(gain);
       gain.connect(ctx.destination);
       osc1.start();
       osc2.start();
-      osc1.stop(ctx.currentTime + 0.75);
-      osc2.stop(ctx.currentTime + 0.75);
+      osc1.stop(ctx.currentTime + 0.8);
+      osc2.stop(ctx.currentTime + 0.8);
     } catch {
       // Audio safety
     }
@@ -252,13 +264,17 @@ export default function App() {
       return;
     }
 
-    const melodyBattle = [
+    const melodyCuteStages = [
       261.63, 293.66, 329.63, 392.00, 329.63, 293.66, 261.63, 196.00,
       220.00, 261.63, 293.66, 329.63, 293.66, 261.63, 220.00, 196.00
     ];
-    const melodyDark = [
+    const melodyDarkStages = [
       130.81, 146.83, 155.56, 174.61, 155.56, 146.83, 130.81, 116.54,
       130.81, 155.56, 174.61, 196.00, 174.61, 155.56, 130.81, 98.00
+    ];
+    const melodyStage5Abyss = [
+      55.00, 58.27, 49.00, 46.25, 73.42, 69.30, 55.00, 41.20,
+      51.91, 46.25, 49.00, 55.00, 38.89, 41.20, 55.00, 32.70
     ];
     const melodyRomanticSunset = [
       329.63, 392.00, 440.00, 523.25, 659.25, 523.25, 440.00, 392.00,
@@ -266,7 +282,7 @@ export default function App() {
     ];
 
     let noteIndex = 0;
-    let notes = melodyBattle;
+    let notes = melodyCuteStages;
     let tempo = 200;
     let waveType = 'triangle';
 
@@ -274,14 +290,14 @@ export default function App() {
       notes = melodyRomanticSunset;
       tempo = 175;
       waveType = 'sine';
-    } else if (phase >= 4) {
-      notes = melodyDark;
-      tempo = 140;
+    } else if (phase === 5) {
+      notes = melodyStage5Abyss;
+      tempo = 115;
       waveType = 'sawtooth';
-    } else if (phase === 3) {
-      notes = melodyDark;
-      tempo = 155;
-      waveType = 'triangle';
+    } else if (phase === 4 || phase === 3) {
+      notes = melodyDarkStages;
+      tempo = 145;
+      waveType = 'sawtooth';
     }
 
     bgmIntervalRef.current = setInterval(() => {
@@ -299,7 +315,7 @@ export default function App() {
     animRef.current.floatingTexts.push({ text, x, y, color, life: 40 });
   };
 
-  // Critical Recovery Needle
+  // Emergency Recovery Needle Animation
   useEffect(() => {
     if (!showNeedleMinigame) return;
     let pos = 50;
@@ -322,7 +338,64 @@ export default function App() {
     return () => cancelAnimationFrame(needleAnimRef.current);
   }, [showNeedleMinigame]);
 
-  // Slow-Mo Matrix Parry System
+  // Friday the 13th Needle Wheel Loop (Stage 4)
+  useEffect(() => {
+    if (!showFatalCircle) return;
+    circleAngleRef.current = 0;
+
+    const loop = () => {
+      circleAngleRef.current = (circleAngleRef.current + 4.2) % 360;
+      setCircleAngle(circleAngleRef.current);
+      circleAnimRef.current = requestAnimationFrame(loop);
+    };
+
+    circleAnimRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(circleAnimRef.current);
+  }, [showFatalCircle]);
+
+  const triggerFatalCircle = () => {
+    setIsTurnLocked(true);
+    const randomTarget = Math.floor(80 + Math.random() * 200);
+    setCircleTargetAngle(randomTarget);
+    setShowFatalCircle(true);
+    playSound(320, 'sawtooth', 0.2);
+  };
+
+  const handleStopFatalCircle = () => {
+    if (circleAnimRef.current) cancelAnimationFrame(circleAnimRef.current);
+    setShowFatalCircle(false);
+
+    const currentDeg = circleAngleRef.current;
+    const target = circleTargetAngle;
+    const tolerance = 35; // Generous 70-degree target arc
+
+    const diff = Math.abs(currentDeg - target);
+    const isSuccess = diff <= tolerance || (360 - diff) <= tolerance;
+
+    if (isSuccess) {
+      playSound(880, 'triangle', 0.3);
+      setBossFlash(true);
+      setTimeout(() => setBossFlash(false), 200);
+      addFloatingText("AMBUSH DEFLECTED!", 35, 110, '#34d399');
+      setBattleLog("⚡ PURE INSTINCT! Charisse deflected the killer's ambush!");
+      setIsTurnLocked(false);
+    } else {
+      playSound(120, 'sawtooth', 0.5);
+      const hitDamage = 35;
+      const remainingHp = Math.max(0, playerHp - hitDamage);
+      setPlayerHp(remainingHp);
+      addFloatingText(`-${hitDamage} HP!`, 40, 110, '#ef4444');
+      setBattleLog("⚠️ Ambush grazed your defenses! Stay alert!");
+      
+      if (remainingHp <= 0) {
+        setTimeout(() => setGameState('gameover'), 600);
+      } else {
+        setIsTurnLocked(false);
+      }
+    }
+  };
+
+  // Slow-Mo Matrix Parry System (Stage 5)
   const triggerMatrixParry = () => {
     setIsTurnLocked(true);
     setShowParryModal(true);
@@ -330,7 +403,7 @@ export default function App() {
     playSound(380, 'sine', 0.15);
 
     const start = Date.now();
-    const duration = 1400; // Comfortable reaction window
+    const duration = 1400; // 1.4s comfortable reaction window
 
     if (parryTimerRef.current) clearInterval(parryTimerRef.current);
 
@@ -362,7 +435,7 @@ export default function App() {
         setScreenShake(false);
       }, 300);
 
-      addFloatingText("PERFECT PARRY! 🛡️", 35, 110, '#38bdf8');
+      addFloatingText("MATRIX PARRY! 🛡️", 35, 110, '#38bdf8');
       setBattleLog("✨ Ray & Charisse parried the incoming strike together!");
       setSynergy((prev) => Math.min(100, prev + 35));
       setIsTurnLocked(false);
@@ -376,7 +449,7 @@ export default function App() {
     setShowParryModal(false);
     playSound(140, 'sawtooth', 0.3);
     
-    const damage = 24;
+    const damage = 25;
     const remainingHp = Math.max(0, playerHp - damage);
     setPlayerHp(remainingHp);
     addFloatingText(`-${damage} HP`, 35, 120, '#ef4444');
@@ -387,6 +460,85 @@ export default function App() {
     } else {
       setIsTurnLocked(false);
     }
+  };
+
+  // Quick-Dodge Evade System (Stages 3 & 4)
+  const triggerDodgeAction = () => {
+    setIsTurnLocked(true);
+    setShowDodgeModal(true);
+    setDodgeTimer(100);
+
+    const start = Date.now();
+    const duration = 1800; // 1.8s window
+
+    if (dodgeTimerRef.current) clearInterval(dodgeTimerRef.current);
+
+    dodgeTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const remaining = Math.max(0, 100 - (elapsed / duration) * 100);
+      setDodgeTimer(remaining);
+
+      if (remaining <= 0) {
+        clearInterval(dodgeTimerRef.current);
+        setShowDodgeModal(false);
+        const dmg = 25;
+        const remainingHp = Math.max(0, playerHp - dmg);
+        setPlayerHp(remainingHp);
+        addFloatingText(`-${dmg} HP`, 35, 120, '#ef4444');
+        setBattleLog("⚠️ Too slow to dodge! Swept by claws!");
+        if (remainingHp <= 0) setTimeout(() => setGameState('gameover'), 600);
+        else setIsTurnLocked(false);
+      }
+    }, 20);
+  };
+
+  const handleDodgeSuccess = () => {
+    if (dodgeTimerRef.current) clearInterval(dodgeTimerRef.current);
+    setShowDodgeModal(false);
+    playSound(850, 'sine', 0.18);
+    addFloatingText("CLEAN DODGE! 💨", 35, 110, '#34d399');
+    setBattleLog("💨 Quick reflexes! Leaped clear of the sweeping attack!");
+    setIsTurnLocked(false);
+  };
+
+  // Detailed Environmental Drawing Helpers
+  const drawPineTree = (ctx, x, y, scale = 1, mood = 'cute') => {
+    const isCorrupt = mood === 'dark' || mood === 'apocalypse';
+    ctx.fillStyle = isCorrupt ? (mood === 'apocalypse' ? '#0a0005' : '#1a0505') : '#3e2723';
+    ctx.fillRect(x + 5 * scale, y + 24 * scale, 4 * scale, 8 * scale);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(x + 7 * scale, y + 32 * scale, 8 * scale, 3 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = isCorrupt ? (mood === 'apocalypse' ? '#2d0612' : '#3b0707') : '#14532d';
+    ctx.fillRect(x + 1 * scale, y + 16 * scale, 12 * scale, 9 * scale);
+    ctx.fillStyle = isCorrupt ? (mood === 'apocalypse' ? '#4a041f' : '#500724') : '#166534';
+    ctx.fillRect(x + 2 * scale, y + 17 * scale, 10 * scale, 6 * scale);
+    ctx.fillStyle = isCorrupt ? (mood === 'apocalypse' ? '#450a0a' : '#450a0a') : '#15803d';
+    ctx.fillRect(x + 3 * scale, y + 9 * scale, 8 * scale, 8 * scale);
+    ctx.fillStyle = isCorrupt ? (mood === 'apocalypse' ? '#70092b' : '#7f1d1d') : '#22c55e';
+    ctx.fillRect(x + 4 * scale, y + 10 * scale, 6 * scale, 5 * scale);
+  };
+
+  const drawMossyRock = (ctx, x, y, w = 16, h = 10, mood = 'cute') => {
+    const isCorrupt = mood === 'dark' || mood === 'apocalypse';
+    ctx.fillStyle = isCorrupt ? '#1a0404' : '#475569';
+    ctx.fillRect(x + 2, y + 2, w - 4, h - 2);
+    ctx.fillRect(x, y + 4, w, h - 4);
+    ctx.fillStyle = isCorrupt ? '#7f1d1d' : '#22c55e';
+    ctx.fillRect(x + 3, y + 1, 6, 3);
+  };
+
+  const drawFlowerTuft = (ctx, x, y, color = '#f43f5e') => {
+    ctx.fillStyle = '#15803d';
+    ctx.fillRect(x, y + 2, 2, 4);
+    ctx.fillRect(x + 3, y + 1, 2, 5);
+    ctx.fillStyle = color;
+    ctx.fillRect(x - 1, y, 3, 3);
+    ctx.fillRect(x + 3, y - 1, 3, 3);
+    ctx.fillStyle = '#fef08a';
+    ctx.fillRect(x, y + 1, 1, 1);
   };
 
   // Character Sprites
@@ -466,7 +618,7 @@ export default function App() {
     ctx.fillRect(x + 19, y + 5, 2, 12);
   };
 
-  // Main Combat Canvas Loop
+  // Main Canvas Render Loop
   useEffect(() => {
     if (gameState !== 'battle') return;
     const canvas = canvasRef.current;
@@ -482,11 +634,11 @@ export default function App() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const skyGradients = [
-        ['#1e1b4b', '#312e81'],
-        ['#064e3b', '#065f46'],
-        ['#180521', '#3b0738'],
-        ['#200000', '#0a0000'],
-        ['#0a0012', '#220022']
+        ['#38bdf8', '#0284c7'], // Stage 1: Cute Sunny Blue
+        ['#0284c7', '#0f766e'], // Stage 2: Cozy Emerald Teal
+        ['#1e1b4b', '#312e81'], // Stage 3: Rainy Twilight
+        ['#280205', '#0c0002'], // Stage 4: Dark Bloody Mist
+        ['#08000f', '#240026']  // Stage 5: Void Apocalypse
       ];
       const curSky = skyGradients[phase - 1] || skyGradients[0];
       const skyGrad = ctx.createLinearGradient(0, 0, 0, 100);
@@ -495,8 +647,16 @@ export default function App() {
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, 160, 240);
 
+      const mood = phase >= 5 ? 'apocalypse' : (phase >= 3 ? 'dark' : 'cute');
+
+      // Beautiful Detailed Trees
+      drawPineTree(ctx, 4, 42, 0.9, mood);
+      drawPineTree(ctx, 22, 38, 1.1, mood);
+      drawPineTree(ctx, 60, 36, 1.0, mood);
+      drawPineTree(ctx, 134, 40, 0.95, mood);
+
       // Arena Ground
-      ctx.fillStyle = phase >= 4 ? '#180205' : '#14532d';
+      ctx.fillStyle = phase >= 4 ? '#180205' : (phase === 3 ? '#0a0512' : '#14532d');
       ctx.beginPath();
       ctx.moveTo(0, 95);
       ctx.lineTo(160, 65);
@@ -505,7 +665,7 @@ export default function App() {
       ctx.fill();
 
       // Pathway
-      ctx.fillStyle = phase >= 4 ? '#100104' : '#334155';
+      ctx.fillStyle = phase >= 4 ? '#100104' : (phase === 3 ? '#1e1b2e' : '#334155');
       ctx.beginPath();
       ctx.moveTo(20, 120);
       ctx.lineTo(145, 90);
@@ -513,8 +673,18 @@ export default function App() {
       ctx.lineTo(10, 215);
       ctx.fill();
 
+      // Rocks and Flower Tufts
+      drawMossyRock(ctx, 6, 98, 18, 11, mood);
+      drawMossyRock(ctx, 136, 175, 16, 9, mood);
+      if (phase <= 2) {
+        drawFlowerTuft(ctx, 12, 145, '#f43f5e');
+        drawFlowerTuft(ctx, 138, 115, '#fbbf24');
+        drawFlowerTuft(ctx, 128, 205, '#ec4899');
+        drawFlowerTuft(ctx, 22, 220, '#60a5fa');
+      }
+
       // Boss Display
-      const bob = Math.sin(tick * 0.1) * 3;
+      const bob = Math.sin(tick * 0.1) * (phase >= 4 ? 4 : 2);
       const bX = 96 + animRef.current.bossOffset.x;
       const bY = 34 + animRef.current.bossOffset.y + bob;
 
@@ -558,14 +728,17 @@ export default function App() {
         } else {
           // Boss 5: Void Titan
           ctx.fillStyle = '#1e0024';
-          ctx.fillRect(bX - 6, bY - 8, 52, 50);
+          ctx.fillRect(bX - 8, bY - 12, 56, 56);
           ctx.fillStyle = '#4a0058';
-          ctx.fillRect(bX - 2, bY - 4, 44, 44);
-          ctx.fillStyle = '#ff0055';
-          ctx.fillRect(bX + 8, bY + 8, 8, 4);
-          ctx.fillRect(bX + 24, bY + 8, 8, 4);
+          ctx.fillRect(bX - 4, bY - 8, 48, 50);
+          ctx.fillStyle = Math.sin(tick * 0.2) > 0 ? '#ff0055' : '#7700ff';
+          ctx.fillRect(bX + 14, bY + 16, 12, 12);
           ctx.fillStyle = '#facc15';
-          ctx.fillRect(bX + 14, bY + 18, 12, 12);
+          ctx.fillRect(bX + 2, bY, 6, 3);
+          ctx.fillRect(bX + 32, bY, 6, 3);
+          ctx.fillStyle = '#ff0033';
+          ctx.fillRect(bX + 8, bY + 7, 8, 3);
+          ctx.fillRect(bX + 24, bY + 7, 8, 3);
         }
       }
 
@@ -578,10 +751,10 @@ export default function App() {
       const p1Y = 138 + animRef.current.p1Offset.y;
       drawCuteCharisse(ctx, p1X, p1Y);
 
-      // Rain Weather (Stages 3-5)
+      // Rain / Blood Rain Weather (Stages 3-5)
       if (phase >= 3) {
-        ctx.strokeStyle = phase >= 4 ? 'rgba(239, 68, 68, 0.65)' : 'rgba(186, 230, 253, 0.45)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = phase >= 4 ? 'rgba(239, 68, 68, 0.7)' : 'rgba(186, 230, 253, 0.45)';
+        ctx.lineWidth = phase >= 4 ? 1.5 : 1;
         animRef.current.rainDrops.forEach((drop) => {
           ctx.beginPath();
           ctx.moveTo(drop.x, drop.y);
@@ -595,6 +768,12 @@ export default function App() {
             drop.x = Math.random() * 165;
           }
         });
+
+        // Stage 5 Violent Lightning Flashes
+        if (phase === 5 && Math.random() < 0.04) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+          ctx.fillRect(0, 0, 160, 240);
+        }
       }
 
       // Floating Texts
@@ -633,9 +812,9 @@ export default function App() {
 
       // Warm Golden Romantic Sunset Gradient
       const skyGrad = ctx.createLinearGradient(0, 0, 0, 140);
-      skyGrad.addColorStop(0, '#f97316'); // Warm orange
-      skyGrad.addColorStop(0.5, '#fb923c'); // Amber
-      skyGrad.addColorStop(1, '#fde047'); // Soft sun glow
+      skyGrad.addColorStop(0, '#f97316');
+      skyGrad.addColorStop(0.5, '#fb923c');
+      skyGrad.addColorStop(1, '#fde047');
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, 160, 240);
 
@@ -702,7 +881,7 @@ export default function App() {
       drawCuteCharisse(ctx, p1X, 145 + walkBob);
       drawCuteRay(ctx, p2X, 145 + walkBob);
 
-      // Cute Floating Heart
+      // Floating Heart
       ctx.fillStyle = '#f43f5e';
       ctx.font = '12px "Press Start 2P"';
       ctx.fillText("❤️", 72 + walkOffset, 138 + Math.sin(tick * 0.1) * 2);
@@ -716,9 +895,9 @@ export default function App() {
     return () => cancelAnimationFrame(frameId);
   }, [gameState, cutsceneCharsFaded]);
 
-  // Attack Input Initialization
+  // Turn Execution
   const initiateAttack = (actionKey) => {
-    if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal) return;
+    if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal || showFatalCircle || showDodgeModal) return;
     setAttackWarning("");
     setPendingAction(actionKey);
     setQteScale(2.3);
@@ -916,7 +1095,7 @@ export default function App() {
     if (nextBossHp <= 0) {
       setTimeout(() => advancePhase(), 800);
     } else {
-      // 25% chance for a surprise mood craving
+      // 25% chance for a temporary craving
       if (Math.random() < 0.25) {
         const cravings = ['comm', 'food', 'hug'];
         const surprise = cravings.filter(c => c !== currentBoss.baseWeakness)[Math.floor(Math.random() * 2)];
@@ -934,7 +1113,7 @@ export default function App() {
   };
 
   const executeHeal = () => {
-    if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal) return;
+    if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal || showFatalCircle || showDodgeModal) return;
     setIsTurnLocked(true);
     setAttackWarning("");
     playSound(580, 'sine', 0.2);
@@ -946,7 +1125,7 @@ export default function App() {
   };
 
   const executeUltimate = () => {
-    if (synergy < 100 || isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal) return;
+    if (synergy < 100 || isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal || showFatalCircle || showDodgeModal) return;
     setIsTurnLocked(true);
     setAttackWarning("");
     setSynergy(0);
@@ -979,8 +1158,17 @@ export default function App() {
     setScreenShake(true);
     setTimeout(() => setScreenShake(false), 300);
 
-    if (phase >= 4 && Math.random() < 0.45) {
+    // Defense Mechanic Triggers
+    if (phase === 5 && Math.random() < 0.5) {
       setTimeout(() => triggerMatrixParry(), 400);
+      return;
+    }
+    if (phase === 4 && Math.random() < 0.5) {
+      setTimeout(() => triggerFatalCircle(), 400);
+      return;
+    }
+    if (phase === 3 && Math.random() < 0.45) {
+      setTimeout(() => triggerDodgeAction(), 400);
       return;
     }
 
@@ -1051,10 +1239,41 @@ export default function App() {
       setPlayerHp((p) => Math.min(100, p + 35));
       setAttackWarning("");
 
-      playSound(660, 'sine', 0.2);
-      setBattleLog(`🔥 BOSS DOWN! Warning: ${bosses[phase].title}!`);
-      setIsTurnLocked(false);
+      if (nextPhase === 5) {
+        setIsTurnLocked(true);
+        setJumpscareActive(true);
+        setScreenShake(true);
+        playJumpscareSound();
+
+        setTimeout(() => {
+          setJumpscareActive(false);
+          setScreenShake(false);
+          setBossIntro(true);
+          playThunderSound();
+
+          setTimeout(() => {
+            setBossIntro(false);
+            setBattleLog("⚡ FINAL BATTLE: The Void Titan rises from the apocalypse storm!");
+            setIsTurnLocked(false);
+          }, 2000);
+        }, 1100);
+      } else if (nextPhase === 4) {
+        setIsTurnLocked(true);
+        setBossIntro(true);
+        playSound(150, 'sawtooth', 0.4);
+
+        setTimeout(() => {
+          setBossIntro(false);
+          setBattleLog("🩸 STAGE 4: Blood rain begins as the Dread Devourer strikes!");
+          setIsTurnLocked(false);
+        }, 1600);
+      } else {
+        playSound(660, 'sine', 0.2);
+        setBattleLog(`🔥 BOSS DOWN! Warning: ${bosses[phase].title}!`);
+        setIsTurnLocked(false);
+      }
     } else {
+      // VICTORY: TRIGGER ROMANTIC SUNSET CUTSCENE
       setIsTurnLocked(true);
       playRomanticChiptune();
       confetti({ particleCount: 160, spread: 90, origin: { y: 0.6 } });
@@ -1075,6 +1294,8 @@ export default function App() {
     setBossIntro(false);
     setJumpscareActive(false);
     setShowParryModal(false);
+    setShowFatalCircle(false);
+    setShowDodgeModal(false);
     setShowNeedleMinigame(false);
     setShowTriviaModal(false);
     setAttackWarning("");
@@ -1149,7 +1370,7 @@ export default function App() {
               <div>
                 <h1 className="font-pixel text-xs sm:text-sm text-pink-200 tracking-wider leading-snug">
                   4-MONTH ANNIVERSARY QUEST<br />
-                  <span className="text-amber-300 font-bold tracking-widest text-[8.5px]">5 BOSSES • DYNAMIC STANCES</span>
+                  <span className="text-amber-300 font-bold tracking-widest text-[8.5px]">5 BOSSES • PROGRESSIVE SURVIVAL</span>
                 </h1>
                 <p className="text-[10px] text-pink-300/80 mt-0.5">
                   Dating Since May 9, 2026 • 123 Days of Love
@@ -1158,14 +1379,15 @@ export default function App() {
 
               <div className="bg-purple-950/80 border border-purple-800 rounded-xl p-2.5 w-full max-w-[340px] text-left shadow-2xl backdrop-blur-md space-y-1 mt-0.5">
                 <div className="font-pixel text-[7.5px] text-yellow-300 border-b border-purple-800/80 pb-0.5 flex items-center justify-between tracking-wider">
-                  <span>COMBAT INTELLIGENCE</span>
+                  <span>DEFENSE ARSENAL</span>
                   <span className="text-pink-300">5 STAGES</span>
                 </div>
 
                 <div className="text-[10px] text-pink-200 space-y-1">
-                  <p>🛡️ <b>Dynamic Craving:</b> Monsters have primary weaknesses, but occasionally crave a surprise action!</p>
-                  <p>⚡ <b>Slow-Mo Parry:</b> Tap Shield when the shrinking spark enters the shield ring!</p>
-                  <p>🌅 Defeat the Void Titan to unlock our romantic sunset cutscene & love letters!</p>
+                  <p>🎡 <b>Stage 4:</b> Friday the 13th wheel skill check!</p>
+                  <p>⚡ <b>Stage 5:</b> Slow-Mo Matrix shield deflection!</p>
+                  <p>💨 <b>Stage 3:</b> Agile quick-dodge claw sweeps!</p>
+                  <p>🩹 <b>Emergency Heal:</b> Green needle check at &lt;35% HP!</p>
                 </div>
               </div>
             </div>
@@ -1180,6 +1402,39 @@ export default function App() {
                 className="w-full font-pixel text-xs bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 py-3.5 rounded-xl shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 tracking-wider transform active:scale-95 transition-all"
               >
                 START BATTLE <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================= INSTRUCTIONS MODAL ================= */}
+        {showInstructions && (
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border-2 border-purple-500/80 rounded-2xl p-4 max-w-[320px] w-full text-left relative shadow-2xl">
+              <button 
+                onClick={() => setShowInstructions(false)}
+                className="absolute top-3.5 right-3.5 text-slate-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+              
+              <div className="flex items-center gap-2 font-pixel text-xs text-purple-300 mb-2.5">
+                <ShieldCheck size={16} />
+                <span>COMBAT MECHANICS</span>
+              </div>
+              
+              <div className="text-[11px] text-slate-300 space-y-2 leading-relaxed">
+                <p>🔄 <b>Dynamic Craving:</b> Monsters have primary weaknesses (~80%), but sometimes show a glowing mood craving!</p>
+                <p>🎡 <b>Friday 13th Wheel (Stage 4):</b> Stop the rotating dial in the white slice to evade damage!</p>
+                <p>⚡ <b>Slow-Mo Shield (Stage 5):</b> Press Parry when the contracting ring hits the center shield!</p>
+                <p>🧋 <b>Warm Milk Tea:</b> Heals +35 HP whenever you need energy!</p>
+              </div>
+
+              <button
+                onClick={() => setShowInstructions(false)}
+                className="w-full mt-3.5 font-pixel text-[9px] bg-purple-600 hover:bg-purple-700 py-2 rounded-lg text-center"
+              >
+                GOT IT!
               </button>
             </div>
           </div>
@@ -1217,7 +1472,7 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Top Right: Full Uncropped Boss Health Card */}
+              {/* Top Right: Boss Health Card */}
               <div className="absolute top-2 right-2 border p-1.5 px-2 rounded-lg min-w-[150px] shadow-lg z-30 bg-black/85 border-slate-700">
                 <div className="flex justify-between items-center gap-2 font-pixel text-[7.5px] text-pink-300 mb-0.5 whitespace-nowrap">
                   <span className="tracking-tight">{currentBoss.name}</span>
@@ -1256,12 +1511,82 @@ export default function App() {
                 </div>
               </div>
 
-              {/* SLOW-MO MATRIX SHIELD PARRY MODAL */}
+              {/* Jumpscare Overlay (Stage 5 Transition) */}
+              {jumpscareActive && (
+                <div className="absolute inset-0 z-50 bg-red-950 flex flex-col items-center justify-center p-4 overflow-hidden animate-shake">
+                  <div className="text-8xl animate-ping select-none">👁️⚡</div>
+                  <div className="absolute inset-0 bg-red-600/40 mix-blend-color-dodge animate-pulse" />
+                  <h1 className="font-pixel text-lg sm:text-xl text-white tracking-widest mt-4 drop-shadow-[0_0_20px_rgba(255,0,0,1)] animate-bounce text-center">
+                    THE ABYSS CONSUMES!
+                  </h1>
+                </div>
+              )}
+
+              {/* Boss Entrances */}
+              {bossIntro && (
+                <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center text-center p-4">
+                  <span className="font-pixel text-[8px] text-yellow-400 bg-black px-3 py-1 rounded-full border border-yellow-500 mb-2 animate-bounce">
+                    {phase === 5 ? '⚡ FINAL BATTLE: VOID APOCALYPSE ⚡' : '🩸 STAGE 4: BLOOD ABYSS 🩸'}
+                  </span>
+                  <h2 className="font-pixel text-sm sm:text-base text-white tracking-widest leading-relaxed drop-shadow-[0_0_15px_rgba(216,70,239,0.9)]">
+                    {currentBoss.title}
+                  </h2>
+                  <p className="text-[11px] text-pink-200 mt-1 font-bold animate-pulse">
+                    {phase === 5 ? 'Thunder rumbles as the ultimate darkness rises!' : 'Watch out for sudden ambushes!'}
+                  </p>
+                </div>
+              )}
+
+              {/* FRIDAY THE 13TH NEEDLE WHEEL MODAL (STAGE 4) */}
+              {showFatalCircle && (
+                <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+                  <div className="bg-slate-950 border-2 border-red-600 rounded-2xl p-4 flex flex-col items-center max-w-[280px] w-full text-center shadow-[0_0_25px_rgba(239,68,68,0.7)] animate-shake">
+                    <span className="font-pixel text-[8px] text-red-400 bg-red-950 border border-red-700 px-2.5 py-0.5 rounded-full mb-1 flex items-center gap-1">
+                      <Skull size={11} /> FRIDAY 13TH AMBUSH!
+                    </span>
+                    <p className="text-xs text-white font-bold mb-2">
+                      STOP the dial in the white slice!
+                    </p>
+
+                    <div className="relative w-36 h-36 rounded-full border-4 border-slate-700 flex items-center justify-center overflow-hidden bg-slate-900 shadow-inner">
+                      <div 
+                        className="absolute w-full h-full pointer-events-none"
+                        style={{
+                          background: `conic-gradient(from ${circleTargetAngle - 18}deg, transparent 0deg, #ffffff 1deg, #ef4444 18deg, #ffffff 36deg, transparent 37deg)`
+                        }}
+                      />
+
+                      <div 
+                        className="absolute w-full h-1 pointer-events-none"
+                        style={{
+                          transform: `rotate(${circleAngle}deg)`,
+                          transformOrigin: 'center center'
+                        }}
+                      >
+                        <div className="w-1/2 h-full bg-yellow-400 shadow-[0_0_8px_#facc15]" />
+                      </div>
+
+                      <div className="w-8 h-8 rounded-full bg-slate-950 border-2 border-yellow-400 z-10 flex items-center justify-center font-pixel text-[7px] text-yellow-300">
+                        ⚡
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleStopFatalCircle}
+                      className="w-full mt-3 font-pixel text-[10px] bg-red-600 hover:bg-red-500 text-white py-3 rounded-xl shadow-lg shadow-red-600/50 active:scale-95 transition-all tracking-wider"
+                    >
+                      STOP DIAL! 🎯
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* SLOW-MO MATRIX SHIELD PARRY MODAL (STAGE 5) */}
               {showParryModal && (
                 <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
                   <div className="bg-slate-950 border-2 border-cyan-400 rounded-2xl p-4 flex flex-col items-center max-w-[280px] w-full text-center shadow-[0_0_25px_rgba(34,211,238,0.7)] animate-shake">
                     <span className="font-pixel text-[8px] text-cyan-300 bg-cyan-950 border border-cyan-700 px-2.5 py-0.5 rounded-full mb-2 flex items-center gap-1">
-                      <Shield size={11} className="text-cyan-400" /> SLOW-MO SHIELD PARRY!
+                      <Shield size={11} className="text-cyan-400" /> SLOW-MO MATRIX PARRY!
                     </span>
                     <p className="text-[11px] text-slate-200 font-semibold mb-3">
                       Tap when the shrinking ring hits the shield!
@@ -1287,6 +1612,34 @@ export default function App() {
                       className="w-full mt-3 font-pixel text-[9.5px] bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-slate-950 font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-all"
                     >
                       SHIELD PARRY! 🛡️
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* QUICK-DODGE MODAL (STAGE 3) */}
+              {showDodgeModal && (
+                <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+                  <div className="bg-slate-950 border-2 border-emerald-400 rounded-2xl p-4 flex flex-col items-center max-w-[280px] w-full text-center shadow-2xl animate-shake">
+                    <span className="font-pixel text-[8px] text-emerald-300 bg-emerald-950 border border-emerald-700 px-2.5 py-0.5 rounded-full mb-2 flex items-center gap-1">
+                      <Wind size={11} /> CLAW SWEEP INCOMING!
+                    </span>
+                    <p className="text-[11px] text-slate-200 font-semibold mb-2">
+                      Jump over the incoming sweep!
+                    </p>
+
+                    <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-3">
+                      <div 
+                        className="bg-emerald-400 h-full transition-all duration-75"
+                        style={{ width: `${dodgeTimer}%` }}
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleDodgeSuccess}
+                      className="w-full font-pixel text-[9.5px] bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-3 rounded-xl shadow-lg active:scale-95 transition-all"
+                    >
+                      DODGE / JUMP! 💨
                     </button>
                   </div>
                 </div>
@@ -1491,7 +1844,7 @@ export default function App() {
                   />
                 </div>
                 <button
-                  disabled={synergy < 100 || isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal}
+                  disabled={synergy < 100 || isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal || showFatalCircle || showDodgeModal}
                   onClick={executeUltimate}
                   className={`font-pixel text-[7px] px-2 py-0.5 rounded transition-all ${
                     synergy >= 100 
@@ -1506,7 +1859,7 @@ export default function App() {
               {/* 4-Button Action Grid */}
               <div className="grid grid-cols-2 gap-1.5">
                 <button
-                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal}
+                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal || showFatalCircle || showDodgeModal}
                   onClick={() => initiateAttack('comm')}
                   className={`py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md text-left ${
                     currentWeakness === 'comm' ? 'bg-pink-600 ring-2 ring-yellow-300 animate-pulse' : 'bg-pink-800/80 hover:bg-pink-700'
@@ -1520,7 +1873,7 @@ export default function App() {
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal}
+                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal || showFatalCircle || showDodgeModal}
                   onClick={() => initiateAttack('food')}
                   className={`py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md text-left ${
                     currentWeakness === 'food' ? 'bg-emerald-600 ring-2 ring-yellow-300 animate-pulse' : 'bg-emerald-800/80 hover:bg-emerald-700'
@@ -1534,7 +1887,7 @@ export default function App() {
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal}
+                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal || showFatalCircle || showDodgeModal}
                   onClick={() => initiateAttack('hug')}
                   className={`py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md text-left ${
                     currentWeakness === 'hug' ? 'bg-purple-600 ring-2 ring-yellow-300 animate-pulse' : 'bg-purple-800/80 hover:bg-purple-700'
@@ -1548,7 +1901,7 @@ export default function App() {
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal}
+                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showParryModal || showFatalCircle || showDodgeModal}
                   onClick={executeHeal}
                   className="bg-sky-600 hover:bg-sky-500 disabled:opacity-40 py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md shadow-sky-600/30 text-left"
                 >
@@ -1639,7 +1992,7 @@ export default function App() {
             <div>
               <h2 className="font-pixel text-base text-red-500 tracking-wider">OVERWHELMED BY DARKNESS</h2>
               <p className="text-[11px] text-slate-400 mt-1.5 max-w-[250px] leading-relaxed">
-                The storm broke your defense! Watch the monster's current craving and time your Slow-Mo Parries!
+                The storm broke your defense! Watch the monster's current craving and time your Parries and Dodges!
               </p>
             </div>
 
