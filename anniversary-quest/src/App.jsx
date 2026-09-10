@@ -3,7 +3,8 @@ import confetti from 'canvas-confetti';
 import { 
   Trophy, Sparkles, HelpCircle, X, ArrowRight, 
   ShieldCheck, Zap, RefreshCw, Award, AlertTriangle, 
-  Skull, HeartPulse, Volume2, VolumeX, Heart, ArrowLeft, ArrowUp, ArrowDown
+  Skull, HeartPulse, Volume2, VolumeX, Heart, ArrowLeft, ArrowUp, ArrowDown,
+  Flame, EyeOff
 } from 'lucide-react';
 
 export default function App() {
@@ -20,23 +21,29 @@ export default function App() {
   const [isTurnLocked, setIsTurnLocked] = useState(false);
   const [attackWarning, setAttackWarning] = useState("");
 
-  // Level 3 Boss Entrance
+  // Jumpscare & Intros
   const [finalBossIntro, setFinalBossIntro] = useState(false);
+  const [jumpscareActive, setJumpscareActive] = useState(false);
 
-  // Multi-tier QTE Attack Sequence States
+  // QTE Attack States (Tighter timings for Hard Mode)
   const [qteStep, setQteStep] = useState(null); // 'timed' | 'mash' | 'swipe' | null
   const [qteScale, setQteScale] = useState(2.3);
   const [mashCount, setMashCount] = useState(0);
   const [mashTimer, setMashTimer] = useState(100);
 
-  // Injustice-Style Directional Swipe Chain: 'LEFT' | 'RIGHT' | 'UP_OR_DOWN'
+  // Injustice-Style Directional Swipe Chain
   const [requiredSwipe, setRequiredSwipe] = useState('LEFT');
   const [swipeTimer, setSwipeTimer] = useState(100);
   const [touchStartPos, setTouchStartPos] = useState(null);
 
+  // Friday the 13th Fatal Skill Check Circle
+  const [showFatalCircle, setShowFatalCircle] = useState(false);
+  const [circleAngle, setCircleAngle] = useState(0);
+  const [circleTargetAngle, setCircleTargetAngle] = useState(180);
+
   const [pendingAction, setPendingAction] = useState(null);
 
-  // Critical Health Mini-Game & Trivia States
+  // Standard Critical Health Mini-Game & Trivia States
   const [showNeedleMinigame, setShowNeedleMinigame] = useState(false);
   const [needlePos, setNeedlePos] = useState(50);
   const [showTriviaModal, setShowTriviaModal] = useState(false);
@@ -47,7 +54,7 @@ export default function App() {
   const [bossFlash, setBossFlash] = useState(false);
   const [activePolaroid, setActivePolaroid] = useState(0);
 
-  // Animation Positions & Weather
+  // Animation Positions & Blood Rain Weather
   const animRef = useRef({
     p1Offset: { x: 0, y: 0 },
     p2Offset: { x: 0, y: 0 },
@@ -62,6 +69,8 @@ export default function App() {
   const qteTimerRef = useRef(null);
   const subQteTimerRef = useRef(null);
   const needleAnimRef = useRef(null);
+  const circleAnimRef = useRef(null);
+  const circleAngleRef = useRef(0);
 
   const bosses = [
     {
@@ -78,9 +87,15 @@ export default function App() {
     },
     {
       name: "OVERTHINK PHANTOM",
-      title: "FINAL STAGE: OVERTHINK PHANTOM",
+      title: "STAGE 3: OVERTHINK PHANTOM",
       weakness: "hug",
       hint: "Shower it with reassurance and warm hugs!"
+    },
+    {
+      name: "DREAD DEVOURER 💀",
+      title: "FINAL STAGE: DREAD DEVOURER",
+      weakness: "comm",
+      hint: "Overcome fear with unbreakable trust!"
     }
   ];
 
@@ -106,12 +121,12 @@ export default function App() {
 
   useEffect(() => {
     const drops = [];
-    for (let i = 0; i < 45; i++) {
+    for (let i = 0; i < 60; i++) {
       drops.push({
         x: Math.random() * 160,
         y: Math.random() * 240,
-        speed: 4 + Math.random() * 4,
-        length: 6 + Math.random() * 5
+        speed: 5 + Math.random() * 5,
+        length: 8 + Math.random() * 6
       });
     }
     animRef.current.rainDrops = drops;
@@ -135,21 +150,55 @@ export default function App() {
       const gain = ctx.createGain();
       osc.type = type;
       osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      gain.gain.setValueAtTime(0.07, ctx.currentTime);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(ramp, ctx.currentTime + dur);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + dur);
     } catch {
-      // Audio fallback safety
+      // Audio safety
+    }
+  };
+
+  const playJumpscareSound = () => {
+    if (isMuted) return;
+    try {
+      initAudio();
+      const ctx = audioCtxRef.current;
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc1.type = 'sawtooth';
+      osc2.type = 'square';
+      osc1.frequency.setValueAtTime(120, ctx.currentTime);
+      osc1.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.15);
+      osc1.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.8);
+      
+      osc2.frequency.setValueAtTime(260, ctx.currentTime);
+      osc2.frequency.linearRampToValueAtTime(950, ctx.currentTime + 0.2);
+
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.85);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start();
+      osc2.start();
+      osc1.stop(ctx.currentTime + 0.85);
+      osc2.stop(ctx.currentTime + 0.85);
+    } catch {
+      // Audio safety
     }
   };
 
   const playFanfare = () => {
     if (isMuted) return;
-    const notes = [261.6, 329.6, 392.0, 523.2, 659.2, 783.99];
-    notes.forEach((n, i) => setTimeout(() => playSound(n, 'sine', 0.28), i * 100));
+    const notes = [261.6, 329.6, 392.0, 523.2, 659.2, 783.99, 1046.5];
+    notes.forEach((n, i) => setTimeout(() => playSound(n, 'sine', 0.28), i * 90));
   };
 
   // Background Music Loop
@@ -167,6 +216,10 @@ export default function App() {
       130.81, 146.83, 155.56, 174.61, 155.56, 146.83, 130.81, 116.54,
       130.81, 155.56, 174.61, 196.00, 174.61, 155.56, 130.81, 98.00
     ];
+    const melodyDisturbingBoss4 = [
+      65.41, 69.30, 61.74, 58.27, 82.41, 77.78, 65.41, 49.00,
+      61.74, 55.00, 58.27, 65.41, 49.00, 46.25, 65.41, 38.89
+    ];
     const melodyVictory = [
       523.25, 659.25, 783.99, 1046.50, 783.99, 659.25, 523.25, 587.33,
       659.25, 783.99, 880.00, 1046.50, 880.00, 783.99, 659.25, 587.33
@@ -181,6 +234,10 @@ export default function App() {
       notes = melodyVictory;
       tempo = 140;
       waveType = 'sine';
+    } else if (phase === 4) {
+      notes = melodyDisturbingBoss4;
+      tempo = 120;
+      waveType = 'sawtooth';
     } else if (phase === 3) {
       notes = melodyBoss3;
       tempo = 150;
@@ -202,6 +259,7 @@ export default function App() {
     animRef.current.floatingTexts.push({ text, x, y, color, life: 40 });
   };
 
+  // Standard Critical Recovery Needle Loop
   useEffect(() => {
     if (!showNeedleMinigame) return;
     let pos = 50;
@@ -224,11 +282,64 @@ export default function App() {
     return () => cancelAnimationFrame(needleAnimRef.current);
   }, [showNeedleMinigame]);
 
+  // Friday the 13th Fast Fatal Circle Skill Check Loop
+  useEffect(() => {
+    if (!showFatalCircle) return;
+    circleAngleRef.current = 0;
+
+    const loop = () => {
+      circleAngleRef.current = (circleAngleRef.current + 6.2) % 360; // Fast rotation
+      setCircleAngle(circleAngleRef.current);
+      circleAnimRef.current = requestAnimationFrame(loop);
+    };
+
+    circleAnimRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(circleAnimRef.current);
+  }, [showFatalCircle]);
+
+  const triggerFatalCircle = () => {
+    setIsTurnLocked(true);
+    const randomTarget = Math.floor(90 + Math.random() * 180);
+    setCircleTargetAngle(randomTarget);
+    setShowFatalCircle(true);
+    playSound(350, 'sawtooth', 0.2);
+  };
+
+  const handleStopFatalCircle = () => {
+    if (circleAnimRef.current) cancelAnimationFrame(circleAnimRef.current);
+    setShowFatalCircle(false);
+
+    const currentDeg = circleAngleRef.current;
+    const target = circleTargetAngle;
+    const tolerance = 24; // Tight Friday the 13th sweet spot window
+
+    const diff = Math.abs(currentDeg - target);
+    const isSuccess = diff <= tolerance || (360 - diff) <= tolerance;
+
+    if (isSuccess) {
+      playSound(880, 'triangle', 0.3);
+      setBossFlash(true);
+      setTimeout(() => setBossFlash(false), 200);
+      addFloatingText("KILLER PUSHED BACK!", 35, 110, '#34d399');
+      setBattleLog("⚡ PURE INSTINCT! Charisse dodged instant death and staggered the killer!");
+      setIsTurnLocked(false);
+    } else {
+      // Instant Death Failure
+      playSound(80, 'sawtooth', 0.7);
+      setPlayerHp(0);
+      setScreenShake(true);
+      setTimeout(() => setScreenShake(false), 400);
+      addFloatingText("EXECUTION!", 40, 110, '#ef4444');
+      setBattleLog("💀 MISSED SKILL CHECK! The Devourer executed your team instantly!");
+      setTimeout(() => setGameState('gameover'), 600);
+    }
+  };
+
   const animatePlayerAttack = (attacker = 'p1', callback) => {
     const targetX = 58;
     const targetY = -70;
     const startTime = Date.now();
-    const duration = 400;
+    const duration = 380;
 
     const animInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
@@ -270,7 +381,7 @@ export default function App() {
     const targetX = -45;
     const targetY = 70;
     const startTime = Date.now();
-    const duration = 460;
+    const duration = 440;
 
     const animInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
@@ -292,55 +403,29 @@ export default function App() {
     }, 16);
   };
 
-  const drawPineTree = (ctx, x, y, scale = 1) => {
-    ctx.fillStyle = '#3e2723';
+  const drawPineTree = (ctx, x, y, scale = 1, isCorrupted = false) => {
+    ctx.fillStyle = isCorrupted ? '#1a0505' : '#3e2723';
     ctx.fillRect(x + 5 * scale, y + 24 * scale, 4 * scale, 8 * scale);
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath();
     ctx.ellipse(x + 7 * scale, y + 32 * scale, 8 * scale, 3 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#14532d';
+    ctx.fillStyle = isCorrupted ? '#3b0707' : '#14532d';
     ctx.fillRect(x + 1 * scale, y + 16 * scale, 12 * scale, 9 * scale);
-    ctx.fillStyle = '#166534';
+    ctx.fillStyle = isCorrupted ? '#500724' : '#166534';
     ctx.fillRect(x + 2 * scale, y + 17 * scale, 10 * scale, 6 * scale);
-    ctx.fillStyle = '#15803d';
+    ctx.fillStyle = isCorrupted ? '#450a0a' : '#15803d';
     ctx.fillRect(x + 3 * scale, y + 9 * scale, 8 * scale, 8 * scale);
-    ctx.fillStyle = '#22c55e';
+    ctx.fillStyle = isCorrupted ? '#7f1d1d' : '#22c55e';
     ctx.fillRect(x + 4 * scale, y + 10 * scale, 6 * scale, 5 * scale);
-    ctx.fillStyle = '#16a34a';
-    ctx.fillRect(x + 5 * scale, y + 2 * scale, 4 * scale, 8 * scale);
-    ctx.fillStyle = '#4ade80';
-    ctx.fillRect(x + 6 * scale, y + 1 * scale, 2 * scale, 3 * scale);
   };
 
-  const drawMossyRock = (ctx, x, y, w = 16, h = 10) => {
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath();
-    ctx.ellipse(x + w / 2, y + h + 1, w / 2 + 1, h / 3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#475569';
+  const drawMossyRock = (ctx, x, y, w = 16, h = 10, isCorrupted = false) => {
+    ctx.fillStyle = isCorrupted ? '#180303' : '#475569';
     ctx.fillRect(x + 2, y + 2, w - 4, h - 2);
     ctx.fillRect(x, y + 4, w, h - 4);
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(x + w - 4, y + 3, 4, h - 3);
-    ctx.fillRect(x + 2, y + h - 2, w - 4, 2);
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillRect(x + 2, y + 2, w - 6, 2);
-    ctx.fillStyle = '#22c55e';
+    ctx.fillStyle = isCorrupted ? '#7f1d1d' : '#22c55e';
     ctx.fillRect(x + 3, y + 1, 6, 3);
-    ctx.fillStyle = '#15803d';
-    ctx.fillRect(x + 5, y + 3, 3, 2);
-  };
-
-  const drawFlowerTuft = (ctx, x, y, flowerColor = '#f43f5e') => {
-    ctx.fillStyle = '#15803d';
-    ctx.fillRect(x, y + 2, 2, 4);
-    ctx.fillRect(x + 3, y + 1, 2, 5);
-    ctx.fillStyle = flowerColor;
-    ctx.fillRect(x - 1, y, 3, 3);
-    ctx.fillRect(x + 3, y - 1, 3, 3);
-    ctx.fillStyle = '#fef08a';
-    ctx.fillRect(x, y + 1, 1, 1);
   };
 
   const drawCuteCharisse = (ctx, x, y) => {
@@ -356,8 +441,6 @@ export default function App() {
     ctx.fillStyle = '#f43f5e';
     ctx.fillRect(x + 1, y + 3, 4, 4);
     ctx.fillRect(x + 16, y + 3, 4, 4);
-    ctx.fillStyle = '#fda4af';
-    ctx.fillRect(x + 2, y + 4, 2, 2);
 
     ctx.fillStyle = '#ffd7ba';
     ctx.fillRect(x + 5, y + 5, 11, 9);
@@ -368,19 +451,6 @@ export default function App() {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + 7, y + 8, 1, 2);
     ctx.fillRect(x + 12, y + 8, 1, 2);
-    ctx.fillRect(x + 9, y + 10, 1, 1);
-    ctx.fillRect(x + 14, y + 10, 1, 1);
-
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.65)';
-    ctx.fillRect(x + 5, y + 11, 2, 2);
-    ctx.fillRect(x + 14, y + 11, 2, 2);
-
-    ctx.fillStyle = '#4a2818';
-    ctx.fillRect(x + 4, y + 2, 13, 4);
-    ctx.fillRect(x + 5, y + 5, 3, 2);
-    ctx.fillRect(x + 13, y + 5, 3, 2);
-    ctx.fillStyle = '#6b3e24';
-    ctx.fillRect(x + 6, y + 3, 7, 1);
 
     ctx.fillStyle = '#f472b6';
     ctx.fillRect(x + 5, y + 14, 11, 10);
@@ -388,7 +458,6 @@ export default function App() {
     ctx.fillRect(x + 7, y + 15, 7, 8);
     ctx.fillStyle = '#fbbf24';
     ctx.fillRect(x + 5, y + 23, 11, 2);
-    ctx.fillRect(x + 9, y + 15, 3, 3);
 
     ctx.fillStyle = '#831843';
     ctx.fillRect(x + 6, y + 25, 4, 4);
@@ -396,14 +465,8 @@ export default function App() {
 
     ctx.fillStyle = '#78350f';
     ctx.fillRect(x + 18, y + 7, 2, 21);
-    ctx.fillStyle = '#fde047';
-    ctx.fillRect(x + 16, y + 9, 6, 2);
     ctx.fillStyle = '#ec4899';
     ctx.fillRect(x + 16, y + 3, 6, 5);
-    ctx.fillStyle = '#f472b6';
-    ctx.fillRect(x + 17, y + 4, 4, 3);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x + 17, y + 4, 1, 1);
   };
 
   const drawCuteRay = (ctx, x, y) => {
@@ -415,9 +478,6 @@ export default function App() {
     ctx.fillStyle = '#171717';
     ctx.fillRect(x + 4, y + 2, 13, 5);
     ctx.fillRect(x + 3, y + 4, 15, 4);
-    ctx.fillStyle = '#383838';
-    ctx.fillRect(x + 6, y + 2, 4, 2);
-    ctx.fillRect(x + 12, y + 3, 3, 2);
 
     ctx.fillStyle = '#ffd7ba';
     ctx.fillRect(x + 5, y + 6, 11, 8);
@@ -429,40 +489,22 @@ export default function App() {
     ctx.fillRect(x + 7, y + 9, 1, 1);
     ctx.fillRect(x + 12, y + 9, 1, 1);
 
-    ctx.fillStyle = '#e11d48';
-    ctx.fillRect(x + 9, y + 12, 3, 1);
-
     ctx.fillStyle = '#1d4ed8';
     ctx.fillRect(x + 4, y + 14, 13, 10);
     ctx.fillStyle = '#3b82f6';
     ctx.fillRect(x + 6, y + 15, 9, 8);
     ctx.fillStyle = '#ef4444';
     ctx.fillRect(x + 2, y + 15, 3, 11);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.fillRect(x + 3, y + 14, 4, 4);
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillRect(x + 4, y + 17, 3, 1);
-
-    ctx.fillStyle = '#78350f';
-    ctx.fillRect(x + 5, y + 21, 11, 2);
-    ctx.fillStyle = '#fde047';
-    ctx.fillRect(x + 9, y + 21, 3, 2);
 
     ctx.fillStyle = '#1e293b';
     ctx.fillRect(x + 6, y + 25, 4, 4);
     ctx.fillRect(x + 11, y + 25, 4, 4);
 
-    ctx.fillStyle = '#fde047';
-    ctx.fillRect(x + 17, y + 15, 5, 2);
-    ctx.fillStyle = '#78350f';
-    ctx.fillRect(x + 19, y + 17, 1, 4);
-    ctx.fillStyle = '#e2e8f0';
-    ctx.fillRect(x + 19, y + 5, 2, 10);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x + 19, y + 5, 1, 9);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(x + 19, y + 5, 2, 12);
   };
 
-  // Canvas Render Loop
+  // Canvas Render Loop with Blood Rain & Corrupted Stage 4
   useEffect(() => {
     if (gameState !== 'battle') return;
     const canvas = canvasRef.current;
@@ -481,6 +523,7 @@ export default function App() {
         ['#1e1b4b', '#312e81'],
         ['#064e3b', '#065f46'],
         ['#180521', '#3b0738'],
+        ['#200000', '#0a0000'] // Stage 4: Ominous blood abyss
       ];
       const curSky = skyGradients[phase - 1] || skyGradients[0];
       const skyGrad = ctx.createLinearGradient(0, 0, 0, 100);
@@ -489,12 +532,15 @@ export default function App() {
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, 160, 240);
 
-      drawPineTree(ctx, 4, 42, 0.9);
-      drawPineTree(ctx, 22, 38, 1.1);
-      drawPineTree(ctx, 60, 36, 1.0);
-      drawPineTree(ctx, 134, 40, 0.95);
+      const isStage4 = phase === 4;
 
-      ctx.fillStyle = phase === 3 ? '#0a0512' : '#0f172a';
+      drawPineTree(ctx, 4, 42, 0.9, isStage4);
+      drawPineTree(ctx, 22, 38, 1.1, isStage4);
+      drawPineTree(ctx, 60, 36, 1.0, isStage4);
+      drawPineTree(ctx, 134, 40, 0.95, isStage4);
+
+      // Distorted Ground Terrain
+      ctx.fillStyle = isStage4 ? '#1a0303' : (phase === 3 ? '#0a0512' : '#0f172a');
       ctx.beginPath();
       ctx.moveTo(-10, 85);
       ctx.lineTo(40, 60);
@@ -504,7 +550,7 @@ export default function App() {
       ctx.lineTo(-10, 95);
       ctx.fill();
 
-      ctx.fillStyle = phase === 3 ? '#062817' : '#14532d';
+      ctx.fillStyle = isStage4 ? '#2d0505' : (phase === 3 ? '#062817' : '#14532d');
       ctx.beginPath();
       ctx.moveTo(0, 95);
       ctx.lineTo(160, 65);
@@ -512,15 +558,8 @@ export default function App() {
       ctx.lineTo(0, 240);
       ctx.fill();
 
-      ctx.fillStyle = phase === 3 ? '#08331d' : '#166534';
-      ctx.beginPath();
-      ctx.moveTo(0, 96);
-      ctx.lineTo(160, 66);
-      ctx.lineTo(160, 235);
-      ctx.lineTo(0, 235);
-      ctx.fill();
-
-      ctx.fillStyle = phase === 3 ? '#1e1b2e' : '#334155';
+      // Disturbed Pathway
+      ctx.fillStyle = isStage4 ? '#180202' : (phase === 3 ? '#1e1b2e' : '#334155');
       ctx.beginPath();
       ctx.moveTo(20, 120);
       ctx.lineTo(145, 90);
@@ -528,36 +567,22 @@ export default function App() {
       ctx.lineTo(10, 215);
       ctx.fill();
 
-      ctx.strokeStyle = phase === 3 ? '#120d24' : '#1e293b';
-      ctx.lineWidth = 1;
-      for (let i = -60; i < 220; i += 24) {
-        ctx.beginPath();
-        ctx.moveTo(i, 90);
-        ctx.lineTo(i + 70, 220);
-        ctx.stroke();
-      }
+      drawMossyRock(ctx, 6, 98, 18, 11, isStage4);
+      drawMossyRock(ctx, 136, 175, 16, 9, isStage4);
 
-      drawMossyRock(ctx, 6, 98, 18, 11);
-      drawMossyRock(ctx, 136, 175, 16, 9);
-      drawFlowerTuft(ctx, 12, 145, '#f43f5e');
-      drawFlowerTuft(ctx, 138, 115, '#fbbf24');
-      drawFlowerTuft(ctx, 128, 205, '#ec4899');
-      drawFlowerTuft(ctx, 22, 220, '#60a5fa');
-
-      const bob = Math.sin(tick * 0.08) * 2;
+      // Boss Rendering
+      const bob = Math.sin(tick * (isStage4 ? 0.16 : 0.08)) * (isStage4 ? 4 : 2);
       const bX = 96 + animRef.current.bossOffset.x;
       const bY = 34 + animRef.current.bossOffset.y + bob;
 
       if (bossFlash) {
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(bX - 2, bY - 2, 44, 42);
+        ctx.fillRect(bX - 4, bY - 4, 48, 48);
       } else {
         if (phase === 1) {
           ctx.fillStyle = '#4c1d95';
           ctx.fillRect(bX + 2, bY + 6, 36, 30);
           ctx.fillRect(bX + 8, bY, 24, 38);
-          ctx.fillStyle = '#94a3b8';
-          ctx.fillRect(bX + 2, bY - 4, 36, 5);
           ctx.fillStyle = '#ef4444';
           ctx.fillRect(bX + 10, bY + 14, 5, 4);
           ctx.fillRect(bX + 24, bY + 14, 5, 4);
@@ -568,10 +593,7 @@ export default function App() {
           ctx.fillStyle = '#ef4444';
           ctx.fillRect(bX + 10, bY + 12, 5, 5);
           ctx.fillRect(bX + 22, bY + 12, 5, 5);
-          ctx.fillStyle = '#f8fafc';
-          ctx.fillRect(bX + 13, bY + 24, 4, 4);
-          ctx.fillRect(bX + 21, bY + 24, 4, 4);
-        } else {
+        } else if (phase === 3) {
           ctx.fillStyle = '#9d174d';
           ctx.fillRect(bX + 2, bY + 4, 36, 32);
           ctx.fillStyle = '#be185d';
@@ -579,11 +601,40 @@ export default function App() {
           ctx.fillStyle = '#facc15';
           ctx.fillRect(bX + 10, bY + 11, 7, 4);
           ctx.fillRect(bX + 23, bY + 11, 7, 4);
-          ctx.fillStyle = 'rgba(244, 114, 182, 0.4)';
-          ctx.fillRect(bX + 4, bY + 34, 32, 7);
+        } else {
+          // STAGE 4: SCARY DREAD DEVOURER (Demonic pixel beast with glitch aura)
+          ctx.fillStyle = '#450a0a';
+          ctx.fillRect(bX - 2, bY, 44, 40);
+          ctx.fillStyle = '#7f1d1d';
+          ctx.fillRect(bX + 4, bY - 4, 32, 44);
+          
+          // Bleeding demon eyes
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(bX + 8, bY + 8, 8, 7);
+          ctx.fillRect(bX + 24, bY + 8, 8, 7);
+          ctx.fillStyle = '#dc2626';
+          ctx.fillRect(bX + 11, bY + 10, 3, 3);
+          ctx.fillRect(bX + 27, bY + 10, 3, 3);
+
+          // Blood drip tears
+          ctx.fillStyle = '#991b1b';
+          ctx.fillRect(bX + 11, bY + 16, 2, 8);
+          ctx.fillRect(bX + 27, bY + 16, 2, 8);
+
+          // Serrated Horns
+          ctx.fillStyle = '#171717';
+          ctx.fillRect(bX + 2, bY - 9, 5, 10);
+          ctx.fillRect(bX + 33, bY - 9, 5, 10);
+
+          // Sharp jaw
+          ctx.fillStyle = '#f8fafc';
+          for (let tooth = 0; tooth < 4; tooth++) {
+            ctx.fillRect(bX + 8 + tooth * 6, bY + 28, 3, 4);
+          }
         }
       }
 
+      // Players
       const p2X = 64 + animRef.current.p2Offset.x;
       const p2Y = 152 + animRef.current.p2Offset.y;
       drawCuteRay(ctx, p2X, p2Y);
@@ -592,30 +643,32 @@ export default function App() {
       const p1Y = 138 + animRef.current.p1Offset.y;
       drawCuteCharisse(ctx, p1X, p1Y);
 
-      // Rain during Phase 3
-      if (phase === 3) {
-        ctx.strokeStyle = 'rgba(186, 230, 253, 0.45)';
-        ctx.lineWidth = 1;
+      // WEATHER: Stage 3 Regular Rain | Stage 4 BLOOD RAIN & DISTORTION
+      if (phase === 3 || phase === 4) {
+        ctx.strokeStyle = phase === 4 ? 'rgba(239, 68, 68, 0.75)' : 'rgba(186, 230, 253, 0.45)';
+        ctx.lineWidth = phase === 4 ? 1.5 : 1;
         animRef.current.rainDrops.forEach((drop) => {
           ctx.beginPath();
           ctx.moveTo(drop.x, drop.y);
-          ctx.lineTo(drop.x - 2, drop.y + drop.length);
+          ctx.lineTo(drop.x - (phase === 4 ? 3 : 2), drop.y + drop.length);
           ctx.stroke();
 
-          drop.y += drop.speed;
-          drop.x -= 0.6;
+          drop.y += drop.speed * (phase === 4 ? 1.3 : 1);
+          drop.x -= 0.7;
           if (drop.y > 240) {
             drop.y = -5;
             drop.x = Math.random() * 165;
           }
         });
 
-        if (Math.random() < 0.015) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        // Stage 4 Red Lightning / Disturbing Static Flash
+        if (phase === 4 && Math.random() < 0.04) {
+          ctx.fillStyle = 'rgba(220, 38, 38, 0.28)';
           ctx.fillRect(0, 0, 160, 240);
         }
       }
 
+      // Floating battle text
       const fts = animRef.current.floatingTexts;
       for (let i = fts.length - 1; i >= 0; i--) {
         const ft = fts[i];
@@ -636,14 +689,14 @@ export default function App() {
 
   // ================= QTE COMBO SEQUENCE =================
   const initiateAttack = (actionKey) => {
-    if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || finalBossIntro) return;
+    if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive) return;
     setAttackWarning("");
     setPendingAction(actionKey);
     setQteScale(2.3);
     setQteStep('timed');
 
     const start = Date.now();
-    const duration = 1100;
+    const duration = phase === 4 ? 750 : (phase === 3 ? 900 : 1100); // Tighter on harder stages
 
     if (qteTimerRef.current) clearInterval(qteTimerRef.current);
 
@@ -678,7 +731,7 @@ export default function App() {
     setMashTimer(100);
 
     const startTime = Date.now();
-    const duration = 2200;
+    const duration = phase === 4 ? 1700 : 2200; // Faster mash required for Stage 4
 
     if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
 
@@ -699,7 +752,9 @@ export default function App() {
     const nextCount = mashCount + 1;
     setMashCount(nextCount);
 
-    if (nextCount >= 8) {
+    const targetMashes = phase === 4 ? 10 : 8;
+
+    if (nextCount >= targetMashes) {
       if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
       playSound(780, 'triangle', 0.15);
 
@@ -707,21 +762,19 @@ export default function App() {
         setQteStep(null);
         resolveTurn(pendingAction, true);
       } else {
-        // Start Level 3 Combo with Swipe Left
         startDirectionalSwipe('LEFT');
       }
     }
   };
 
-  // ================= INJUSTICE-STYLE DIRECTIONAL SWIPES WITH ANIMATIONS =================
   const startDirectionalSwipe = (direction) => {
     setRequiredSwipe(direction);
     setSwipeTimer(100);
     setTouchStartPos(null);
-    setQteStep('swipe'); // Show the pop up only now
+    setQteStep('swipe');
 
     const startTime = Date.now();
-    const duration = 3000;
+    const duration = phase === 4 ? 2100 : 3000; // Stage 4 swipe window is fast!
 
     if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
 
@@ -765,7 +818,6 @@ export default function App() {
 
     if (swipeMatched) {
       if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
-      // Immediately close pop-up so full attack visual is visible!
       setQteStep(null);
       executeSwipeSuccess(requiredSwipe);
     }
@@ -773,7 +825,6 @@ export default function App() {
 
   const executeSwipeSuccess = (currentDir) => {
     if (currentDir === 'LEFT') {
-      // 1. Charisse charges & hits
       playSound(680, 'triangle', 0.15);
       setBossFlash(true);
       setTimeout(() => setBossFlash(false), 120);
@@ -781,14 +832,9 @@ export default function App() {
       setBattleLog("⚔️ Charisse lunges forward with a starlight strike!");
       
       animatePlayerAttack('p1', () => {
-        // After Charisse finishes returning, trigger prompt 2
-        setTimeout(() => {
-          startDirectionalSwipe('RIGHT');
-        }, 150);
+        setTimeout(() => startDirectionalSwipe('RIGHT'), 150);
       });
-
     } else if (currentDir === 'RIGHT') {
-      // 2. Ray charges & hits
       playSound(780, 'triangle', 0.15);
       setBossFlash(true);
       setTimeout(() => setBossFlash(false), 120);
@@ -796,19 +842,12 @@ export default function App() {
       setBattleLog("⚡ Ray dashes in with a piercing cross-slash!");
 
       animatePlayerAttack('p2', () => {
-        // After Ray finishes returning, trigger prompt 3
-        setTimeout(() => {
-          startDirectionalSwipe('UP_OR_DOWN');
-        }, 150);
+        setTimeout(() => startDirectionalSwipe('UP_OR_DOWN'), 150);
       });
-
     } else if (currentDir === 'UP_OR_DOWN') {
-      // 3. Final together strike!
       playSound(920, 'triangle', 0.25);
       addFloatingText("DUAL SKY FINISHER! ⚡", 45, 115, '#facc15');
       setBattleLog("🌟 Charisse & Ray execute their synchronized team finisher!");
-      
-      // Full power resolution with screen shake
       resolveTurn(pendingAction, true);
     }
   };
@@ -824,7 +863,6 @@ export default function App() {
     setTimeout(() => bossCounterAttack(true), 700);
   };
 
-  // Turn Execution
   const resolveTurn = (actionKey, isCrit) => {
     setIsTurnLocked(true);
     const isEffective = actionKey === currentBoss.weakness;
@@ -846,17 +884,17 @@ export default function App() {
         setScreenShake(false);
       }, 350);
 
-      const baseDmg = isCrit ? 55 : 35;
+      const baseDmg = isCrit ? (phase === 4 ? 45 : 55) : 30;
       playSound(isCrit ? 700 : 500, 'triangle', 0.15);
       addFloatingText(isCrit ? `CRIT! -${baseDmg}` : `-${baseDmg}`, 95, 30, isCrit ? '#f43f5e' : '#facc15');
 
       let hitMsg = "";
       if (actionKey === 'comm') {
-        hitMsg = isCrit ? "💥 CRITICAL LOVE! Honest communication shattered the Ego!" : "💌 Heartfelt words struck home!";
+        hitMsg = isCrit ? "💥 UNBREAKABLE TRUST! Honest communication struck the darkness!" : "💌 Heartfelt words struck home!";
       } else if (actionKey === 'food') {
         hitMsg = isCrit ? "💥 CRITICAL FEAST! Fed burger & milk tea! Goblin is docile!" : "🍔 Fed treats to the Goblin!";
       } else if (actionKey === 'hug') {
-        hitMsg = isCrit ? "💥 3-HIT AIR FINISHER! Reassurance melted the Overthinking Phantom!" : "🫂 Warm hugs calmed the monster!";
+        hitMsg = isCrit ? "💥 3-HIT AIR FINISHER! Warm reassurance pierced the phantom!" : "🫂 Warm hugs calmed the monster!";
       }
 
       const nextBossHp = Math.max(0, bossHp - baseDmg);
@@ -873,19 +911,19 @@ export default function App() {
   };
 
   const executeHeal = () => {
-    if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || finalBossIntro) return;
+    if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive) return;
     setIsTurnLocked(true);
     setAttackWarning("");
     playSound(580, 'sine', 0.2);
-    const restored = Math.min(100, playerHp + 35);
+    const restored = Math.min(100, playerHp + 30);
     setPlayerHp(restored);
-    addFloatingText("+35 HP", 35, 140, '#34d399');
-    setBattleLog("🧪 Shared Warm Milk Tea! Restored 35 HP to our team!");
+    addFloatingText("+30 HP", 35, 140, '#34d399');
+    setBattleLog("🧪 Shared Warm Milk Tea! Restored 30 HP to our team!");
     setTimeout(() => bossCounterAttack(false), 900);
   };
 
   const executeUltimate = () => {
-    if (synergy < 100 || isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || finalBossIntro) return;
+    if (synergy < 100 || isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive) return;
     setIsTurnLocked(true);
     setAttackWarning("");
     setSynergy(0);
@@ -897,13 +935,13 @@ export default function App() {
 
       setBossFlash(true);
       setScreenShake(true);
-      addFloatingText("DUO STRIKE! -85", 85, 25, '#ec4899');
+      addFloatingText("DUO STRIKE! -80", 85, 25, '#ec4899');
       setTimeout(() => {
         setBossFlash(false);
         setScreenShake(false);
       }, 400);
 
-      const nextBossHp = Math.max(0, bossHp - 85);
+      const nextBossHp = Math.max(0, bossHp - 80);
       setBossHp(nextBossHp);
       setBattleLog("🌟 DUO ULTIMATE: 'May 9th Starlight Strike' breaks through all defenses!");
 
@@ -921,7 +959,7 @@ export default function App() {
       setScreenShake(true);
       setTimeout(() => setScreenShake(false), 300);
 
-      const damage = (isHeavyHit ? 28 : 18) + (phase * 4);
+      const damage = (isHeavyHit ? 30 : 20) + (phase * 5);
       const remainingHp = Math.max(0, playerHp - damage);
       setPlayerHp(remainingHp);
       addFloatingText(`-${damage} HP`, 35, 140, '#ef4444');
@@ -930,6 +968,9 @@ export default function App() {
         playSound(100, 'sawtooth', 0.5);
         setBattleLog("💀 Team HP hit 0! You were defeated...");
         setTimeout(() => setGameState('gameover'), 700);
+      } else if (phase === 4 && Math.random() < 0.55) {
+        // Friday the 13th instant-kill ambush counter trigger on Stage 4!
+        setTimeout(() => triggerFatalCircle(), 500);
       } else if (remainingHp <= 35) {
         setIsTurnLocked(true);
         setTimeout(() => {
@@ -982,34 +1023,54 @@ export default function App() {
   };
 
   const advancePhase = () => {
-    if (phase < 3) {
+    if (phase < 4) {
       const nextPhase = phase + 1;
       setPhase(nextPhase);
       setBossHp(100);
       setPlayerHp((p) => Math.min(100, p + 30));
       setAttackWarning("");
 
-      if (nextPhase === 3) {
+      if (nextPhase === 4) {
+        // STAGE 4: JUMPSCARE & NIGHTMARE TRANSITION
+        setIsTurnLocked(true);
+        setJumpscareActive(true);
+        setScreenShake(true);
+        playJumpscareSound();
+
+        // 1.1s jumpscare flash
+        setTimeout(() => {
+          setJumpscareActive(false);
+          setScreenShake(false);
+          setFinalBossIntro(true);
+
+          setTimeout(() => {
+            setFinalBossIntro(false);
+            setBattleLog("🩸 BLOOD RAIN DESCENDS: The Dread Devourer hungers for your souls!");
+            setIsTurnLocked(false);
+          }, 1800);
+        }, 1100);
+
+      } else if (nextPhase === 3) {
         setIsTurnLocked(true);
         setFinalBossIntro(true);
         playSound(100, 'sawtooth', 0.4);
-        setTimeout(() => playSound(120, 'sawtooth', 0.4), 200);
-        setTimeout(() => playSound(180, 'sawtooth', 0.5), 400);
+        setTimeout(() => playSound(180, 'sawtooth', 0.5), 300);
 
         setTimeout(() => {
           setFinalBossIntro(false);
-          setBattleLog("🌧️ FINAL STAGE: Rain pours as Overthinking Phantom stirs!");
+          setBattleLog("🌧️ STAGE 3: Rain pours as Overthinking Phantom stirs!");
           setIsTurnLocked(false);
-        }, 1600);
+        }, 1500);
       } else {
         playSound(660, 'sine', 0.2);
         setBattleLog(`🔥 BOSS DOWN! Warning: ${bosses[phase].title}!`);
         setIsTurnLocked(false);
       }
     } else {
+      // Defeated All 4 Stages
       setIsTurnLocked(true);
       playFanfare();
-      confetti({ particleCount: 140, spread: 90, origin: { y: 0.6 } });
+      confetti({ particleCount: 160, spread: 100, origin: { y: 0.6 } });
       setTimeout(() => setGameState('victory'), 800);
     }
   };
@@ -1021,6 +1082,8 @@ export default function App() {
     setSynergy(0);
     setQteStep(null);
     setFinalBossIntro(false);
+    setJumpscareActive(false);
+    setShowFatalCircle(false);
     setShowNeedleMinigame(false);
     setShowTriviaModal(false);
     setAttackWarning("");
@@ -1048,7 +1111,7 @@ export default function App() {
     },
     {
       caption: "Happy 4-Month Anniversary, My Love! ✨",
-      note: "Dating you since May 9 has been the happiest 4 months of my life. Thank you for being the sweetest partner and the best gamer ever. I love you so, so much Charisse! ❤️",
+      note: "Dating you since May 9 has been the happiest 4 months of my life. You conquered all 4 terrifying trials and proved our love can survive any nightmare. I love you forever Charisse! ❤️",
       emoji: "🎮"
     }
   ];
@@ -1088,77 +1151,47 @@ export default function App() {
             </div>
 
             {/* Hero Section */}
-            <div className="flex flex-col items-center my-auto gap-2 shrink-0 py-1">
+            <div className="flex flex-col items-center my-auto gap-1.5 shrink-0 py-1">
               <div className="relative my-0.5">
-                <div className="text-4xl sm:text-5xl animate-bounce">👾💖</div>
+                <div className="text-4xl sm:text-5xl animate-bounce">👾💀💖</div>
                 <Sparkles className="absolute -top-1.5 -right-2 text-yellow-300 animate-spin" size={18} />
               </div>
 
               <div>
                 <h1 className="font-pixel text-xs sm:text-sm text-pink-200 tracking-wider leading-snug">
-                  HAPPY 4 MONTHS!<br />OUR ANNIVERSARY QUEST
+                  4-MONTH ANNIVERSARY QUEST<br />
+                  <span className="text-red-400 font-bold tracking-widest text-[9px]">NIGHTMARE HARD MODE</span>
                 </h1>
                 <p className="text-[10px] text-pink-300/80 mt-0.5">
-                  Dating Since May 9, 2026 • 123 Days of Love
+                  Dating Since May 9, 2026 • 4 Brutal Bosses
                 </p>
               </div>
 
-              {/* Combos Instruction Card */}
-              <div className="bg-purple-950/80 border border-purple-800 rounded-xl p-2.5 w-full max-w-[340px] text-left shadow-2xl backdrop-blur-md space-y-1.5 mt-1">
-                <div className="font-pixel text-[7.5px] text-yellow-300 border-b border-purple-800/80 pb-1 flex items-center justify-between tracking-wider">
-                  <span>COMBAT COMBOS</span>
-                  <span className="text-pink-300">INJUSTICE QTE</span>
+              {/* Hard Mode Combos Info */}
+              <div className="bg-purple-950/80 border border-purple-800 rounded-xl p-2.5 w-full max-w-[340px] text-left shadow-2xl backdrop-blur-md space-y-1 mt-1">
+                <div className="font-pixel text-[7.5px] text-yellow-300 border-b border-purple-800/80 pb-0.5 flex items-center justify-between tracking-wider">
+                  <span>QUEST BOSSES</span>
+                  <span className="text-pink-300">SURVIVAL MECHANICS</span>
                 </div>
 
-                {/* Level 1 */}
-                <div className="bg-purple-900/40 p-1.5 rounded-lg border border-purple-700/50 space-y-0.5">
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-pink-100 font-bold">Ego Monster</span>
-                    <span className="font-pixel text-[7.5px] text-pink-400">LV.1</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="font-pixel text-[7px] text-pink-300 bg-pink-950 border border-pink-700/70 px-1.5 py-0.5 rounded">
-                      ⚡ TAP
-                    </span>
-                  </div>
+                <div className="bg-purple-900/40 p-1.5 rounded-lg border border-purple-700/50 flex items-center justify-between text-[10px]">
+                  <span className="text-pink-100 font-bold">1. Ego Monster</span>
+                  <span className="font-pixel text-[7px] text-pink-300 bg-pink-950 px-1.5 py-0.5 rounded">⚡ TIMED TAP</span>
                 </div>
 
-                {/* Level 2 */}
-                <div className="bg-purple-900/40 p-1.5 rounded-lg border border-purple-700/50 space-y-0.5">
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-pink-100 font-bold">Hangry Goblin</span>
-                    <span className="font-pixel text-[7.5px] text-emerald-400">LV.2</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="font-pixel text-[7px] text-pink-300 bg-pink-950 border border-pink-700/70 px-1.5 py-0.5 rounded">
-                      ⚡ TAP
-                    </span>
-                    <span className="text-[10px] text-purple-400 font-bold">+</span>
-                    <span className="font-pixel text-[7px] text-emerald-300 bg-emerald-950 border border-emerald-700/70 px-1.5 py-0.5 rounded">
-                      💓 MASH
-                    </span>
-                  </div>
+                <div className="bg-purple-900/40 p-1.5 rounded-lg border border-purple-700/50 flex items-center justify-between text-[10px]">
+                  <span className="text-pink-100 font-bold">2. Hangry Goblin</span>
+                  <span className="font-pixel text-[7px] text-emerald-300 bg-emerald-950 px-1.5 py-0.5 rounded">💓 TAP + MASH</span>
                 </div>
 
-                {/* Level 3 */}
-                <div className="bg-purple-900/40 p-1.5 rounded-lg border border-purple-700/50 space-y-0.5">
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-pink-100 font-bold">Overthink Phantom 🌧️</span>
-                    <span className="font-pixel text-[7.5px] text-purple-400">LV.3</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="font-pixel text-[6.5px] text-pink-300 bg-pink-950 border border-pink-700/70 px-1.5 py-0.5 rounded">
-                      ⚡ TAP
-                    </span>
-                    <span className="text-[10px] text-purple-400 font-bold">+</span>
-                    <span className="font-pixel text-[6.5px] text-emerald-300 bg-emerald-950 border border-emerald-700/70 px-1.5 py-0.5 rounded">
-                      💓 MASH
-                    </span>
-                    <span className="text-[10px] text-purple-400 font-bold">+</span>
-                    <span className="font-pixel text-[6.5px] text-purple-300 bg-purple-950 border border-purple-700/70 px-1.5 py-0.5 rounded">
-                      ⬅️ ➡️ ⬆️ SWIPES
-                    </span>
-                  </div>
+                <div className="bg-purple-900/40 p-1.5 rounded-lg border border-purple-700/50 flex items-center justify-between text-[10px]">
+                  <span className="text-pink-100 font-bold">3. Overthink Phantom</span>
+                  <span className="font-pixel text-[6.5px] text-purple-300 bg-purple-950 px-1.5 py-0.5 rounded">🌧️ RAIN + SWIPES</span>
+                </div>
+
+                <div className="bg-red-950/70 p-1.5 rounded-lg border border-red-700/80 flex items-center justify-between text-[10px]">
+                  <span className="text-red-200 font-bold flex items-center gap-1"><Flame size={11} className="text-red-500 animate-pulse" /> 4. Dread Devourer</span>
+                  <span className="font-pixel text-[6.5px] text-red-300 bg-red-900 px-1.5 py-0.5 rounded animate-pulse">🩸 FATAL CIRCLE</span>
                 </div>
               </div>
             </div>
@@ -1171,7 +1204,7 @@ export default function App() {
                   playSound(440, 'triangle', 0.15);
                   setGameState('battle');
                 }}
-                className="w-full font-pixel text-xs bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 hover:from-pink-600 hover:to-rose-600 py-3.5 rounded-xl shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 tracking-wider transform active:scale-95 transition-all"
+                className="w-full font-pixel text-xs bg-gradient-to-r from-pink-500 via-rose-500 to-red-600 hover:from-pink-600 hover:to-red-700 py-3.5 rounded-xl shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 tracking-wider transform active:scale-95 transition-all"
               >
                 START BATTLE <ArrowRight size={14} />
               </button>
@@ -1182,7 +1215,7 @@ export default function App() {
         {/* ================= INSTRUCTIONS MODAL ================= */}
         {showInstructions && (
           <div className="absolute inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border-2 border-pink-500/80 rounded-2xl p-4 max-w-[320px] w-full text-left relative shadow-2xl">
+            <div className="bg-slate-900 border-2 border-red-500/80 rounded-2xl p-4 max-w-[320px] w-full text-left relative shadow-2xl">
               <button 
                 onClick={() => setShowInstructions(false)}
                 className="absolute top-3.5 right-3.5 text-slate-400 hover:text-white"
@@ -1190,23 +1223,22 @@ export default function App() {
                 <X size={16} />
               </button>
               
-              <div className="flex items-center gap-2 font-pixel text-xs text-pink-300 mb-2.5">
-                <ShieldCheck size={16} className="text-pink-400" />
-                <span>HOW TO PLAY</span>
+              <div className="flex items-center gap-2 font-pixel text-xs text-red-400 mb-2.5">
+                <ShieldCheck size={16} />
+                <span>NIGHTMARE RULES</span>
               </div>
               
               <div className="text-[11px] text-slate-300 space-y-2 leading-relaxed">
-                <p>🎯 <b>LEVEL 1:</b> Tap circle before it shrinks!</p>
-                <p>💓 <b>LEVEL 2:</b> Tap circle + rapidly mash button to fill heart!</p>
-                <p>🪄 <b>LEVEL 3 (INJUSTICE SWIPES):</b> Follow the directional prompts. Each prompt disappears the moment you swipe, showing the strike animation before the next prompt!</p>
-                <p>🩹 <b>CRITICAL HEALING:</b> Whenever Team HP falls below 35%, stop the needle in the large green zone to trigger a +50 HP quiz!</p>
+                <p>🎯 <b>STAGE 1 & 2:</b> Rapid tap reactions and heart mash!</p>
+                <p>🪄 <b>STAGE 3:</b> Rain storm swipe chain (Left ➔ Right ➔ Up/Down)!</p>
+                <p>🩸 <b>STAGE 4 (FRIDAY 13TH SKILL CHECK):</b> The Dread Devourer ambushes with a spinning wheel! You MUST press <b>HIT SKILL CHECK</b> exactly when the red needle lands in the white target slice. If you miss, you die instantly!</p>
               </div>
 
               <button
                 onClick={() => setShowInstructions(false)}
-                className="w-full mt-3.5 font-pixel text-[9px] bg-pink-600 hover:bg-pink-700 py-2 rounded-lg text-center"
+                className="w-full mt-3.5 font-pixel text-[9px] bg-red-600 hover:bg-red-700 py-2 rounded-lg text-center"
               >
-                GOT IT!
+                I AM READY!
               </button>
             </div>
           </div>
@@ -1227,8 +1259,10 @@ export default function App() {
 
               {/* Top Left: Stage Badge + Sound Toggle Group */}
               <div className="absolute top-2 left-2 z-40 flex items-center gap-1.5">
-                <div className="bg-black/80 border border-slate-700 px-2 py-1 rounded-md font-pixel text-[7.5px] text-yellow-300 shadow-md">
-                  STAGE {phase}/3 {phase === 3 ? '🌧️' : ''}
+                <div className={`border px-2 py-1 rounded-md font-pixel text-[7.5px] shadow-md ${
+                  phase === 4 ? 'bg-red-950/90 border-red-600 text-red-300 animate-pulse' : 'bg-black/80 border-slate-700 text-yellow-300'
+                }`}>
+                  STAGE {phase}/4 {phase === 4 ? '🩸' : (phase === 3 ? '🌧️' : '')}
                 </div>
                 <button
                   onClick={() => {
@@ -1243,14 +1277,18 @@ export default function App() {
               </div>
 
               {/* Top Right: Full Uncropped Boss Health Card */}
-              <div className="absolute top-2 right-2 bg-black/85 border border-slate-700 p-1.5 px-2 rounded-lg min-w-[150px] shadow-lg z-30">
+              <div className={`absolute top-2 right-2 border p-1.5 px-2 rounded-lg min-w-[150px] shadow-lg z-30 ${
+                phase === 4 ? 'bg-red-950/90 border-red-600 shadow-red-900/50' : 'bg-black/85 border-slate-700'
+              }`}>
                 <div className="flex justify-between items-center gap-2 font-pixel text-[7.5px] text-pink-300 mb-0.5 whitespace-nowrap">
                   <span className="tracking-tight">{currentBoss.name}</span>
                   <span className="text-[7px] text-slate-300">{bossHp}%</span>
                 </div>
                 <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                   <div 
-                    className="bg-gradient-to-r from-rose-500 to-pink-500 h-full transition-all duration-300"
+                    className={`h-full transition-all duration-300 ${
+                      phase === 4 ? 'bg-gradient-to-r from-red-600 via-rose-500 to-black' : 'bg-gradient-to-r from-rose-500 to-pink-500'
+                    }`}
                     style={{ width: `${bossHp}%` }}
                   />
                 </div>
@@ -1273,19 +1311,76 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Level 3 Flash Intro */}
+              {/* STAGE 4 JUMPSCARE POP-UP OVERLAY */}
+              {jumpscareActive && (
+                <div className="absolute inset-0 z-50 bg-red-950 flex flex-col items-center justify-center p-4 overflow-hidden animate-shake">
+                  <div className="text-7xl sm:text-8xl animate-ping select-none">👹</div>
+                  <div className="absolute inset-0 bg-red-600/40 mix-blend-color-dodge animate-pulse" />
+                  <h1 className="font-pixel text-lg sm:text-xl text-white tracking-widest mt-4 drop-shadow-[0_0_20px_rgba(255,0,0,1)] animate-bounce">
+                    LOOK BEHIND YOU!
+                  </h1>
+                </div>
+              )}
+
+              {/* Level 3 & 4 Ominous Entrance Flash */}
               {finalBossIntro && (
-                <div className="absolute inset-0 z-50 bg-red-950 flex flex-col items-center justify-center animate-pulse text-center p-4">
-                  <div className="absolute inset-0 bg-red-600/30 animate-ping" />
-                  <span className="font-pixel text-[8px] text-yellow-400 bg-black/80 px-2.5 py-0.5 rounded-full border border-yellow-500 mb-2 animate-bounce">
-                    🌧️ FINAL TRIAL: RAINSTORM 🌧️
+                <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center text-center p-4">
+                  <span className="font-pixel text-[8px] text-red-400 bg-black px-3 py-1 rounded-full border border-red-500 mb-2 animate-bounce">
+                    {phase === 4 ? '🩸 FATAL TRIAL: BLOOD ABYSS 🩸' : '🌧️ STAGE 3: RAINSTORM 🌧️'}
                   </span>
-                  <h2 className="font-pixel text-sm text-white tracking-widest leading-relaxed drop-shadow-[0_4px_10px_rgba(239,68,68,0.8)]">
-                    OVERTHINK PHANTOM<br />AWAKENED!
+                  <h2 className="font-pixel text-sm sm:text-base text-white tracking-widest leading-relaxed drop-shadow-[0_0_15px_rgba(239,68,68,0.9)]">
+                    {phase === 4 ? 'THE DREAD DEVOURER\nAWAKENED!' : 'OVERTHINK PHANTOM\nAWAKENED!'}
                   </h2>
-                  <p className="text-[11px] text-pink-200 mt-1 font-bold animate-pulse">
-                    The storm has begun!
+                  <p className="text-[11px] text-red-300 mt-1 font-bold animate-pulse">
+                    {phase === 4 ? 'Do not miss the fatal skill check!' : 'The storm has begun!'}
                   </p>
+                </div>
+              )}
+
+              {/* FRIDAY THE 13TH FATAL CIRCLE SKILL CHECK MODAL */}
+              {showFatalCircle && (
+                <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+                  <div className="bg-slate-950 border-2 border-red-600 rounded-2xl p-4 flex flex-col items-center max-w-[280px] w-full text-center shadow-[0_0_25px_rgba(239,68,68,0.7)] animate-shake">
+                    <span className="font-pixel text-[8px] text-red-400 bg-red-950 border border-red-700 px-2 py-0.5 rounded-full mb-2 flex items-center gap-1">
+                      <Skull size={11} className="animate-spin" /> FATAL SKILL CHECK!
+                    </span>
+                    <p className="text-xs text-white font-bold mb-3">
+                      STOP in the white zone or DIE INSTANTLY!
+                    </p>
+
+                    {/* Spinning Circle Dial with Target Slice */}
+                    <div className="relative w-36 h-36 rounded-full border-4 border-slate-700 flex items-center justify-center overflow-hidden bg-slate-900 shadow-inner">
+                      {/* Fixed Target Sweet Spot */}
+                      <div 
+                        className="absolute w-full h-full pointer-events-none"
+                        style={{
+                          background: `conic-gradient(from ${circleTargetAngle - 14}deg, transparent 0deg, #ffffff 1deg, #ef4444 14deg, #ffffff 28deg, transparent 29deg)`
+                        }}
+                      />
+
+                      {/* Rotating Center Needle */}
+                      <div 
+                        className="absolute w-full h-1 pointer-events-none"
+                        style={{
+                          transform: `rotate(${circleAngle}deg)`,
+                          transformOrigin: 'center center'
+                        }}
+                      >
+                        <div className="w-1/2 h-full bg-yellow-400 shadow-[0_0_8px_#facc15]" />
+                      </div>
+
+                      <div className="w-8 h-8 rounded-full bg-slate-950 border-2 border-yellow-400 z-10 flex items-center justify-center font-pixel text-[7px] text-yellow-300">
+                        ⚡
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleStopFatalCircle}
+                      className="w-full mt-3 font-pixel text-[10px] bg-red-600 hover:bg-red-500 text-white py-3 rounded-xl shadow-lg shadow-red-600/50 active:scale-95 transition-all tracking-wider"
+                    >
+                      HIT SKILL CHECK! 🎯
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -1324,11 +1419,11 @@ export default function App() {
                     <div className="relative w-14 h-14 flex items-center justify-center mb-2">
                       <div 
                         className="w-12 h-12 rounded-full bg-pink-500/20 border-2 border-pink-400 flex items-center justify-center overflow-hidden transition-all"
-                        style={{ transform: `scale(${1 + (mashCount / 8) * 0.2})` }}
+                        style={{ transform: `scale(${1 + (mashCount / (phase === 4 ? 10 : 8)) * 0.2})` }}
                       >
                         <div 
                           className="absolute bottom-0 w-full bg-gradient-to-t from-pink-600 to-rose-400 transition-all duration-75"
-                          style={{ height: `${(mashCount / 8) * 100}%` }}
+                          style={{ height: `${(mashCount / (phase === 4 ? 10 : 8)) * 100}%` }}
                         />
                         <span className="relative z-10 text-lg animate-pulse">💖</span>
                       </div>
@@ -1345,13 +1440,13 @@ export default function App() {
                       onClick={handleMashTap}
                       className="w-full font-pixel text-[8.5px] bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 py-2.5 rounded-xl shadow-lg shadow-pink-500/30 active:scale-90 transition-transform"
                     >
-                      TAP! TAP! ({mashCount}/8) 💓
+                      TAP! TAP! ({mashCount}/{phase === 4 ? 10 : 8}) 💓
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Step 3: Directional Swipes (Disappears immediately when swiped) */}
+              {/* Step 3: Directional Swipes */}
               {qteStep === 'swipe' && (
                 <div 
                   onTouchStart={handlePointerDown}
@@ -1363,7 +1458,6 @@ export default function App() {
                   <div className="bg-slate-900 border-2 border-cyan-400 rounded-2xl p-4 flex flex-col items-center max-w-[270px] w-full text-center shadow-2xl pointer-events-none animate-fade-in">
                     <span className="font-pixel text-[8px] text-yellow-300 mb-1">INJUSTICE COMBO FINISHER</span>
                     
-                    {/* Prompt with Dynamic Arrow */}
                     <div className="flex items-center justify-center gap-2 my-2">
                       {requiredSwipe === 'LEFT' && (
                         <div className="flex items-center gap-2 text-cyan-300 animate-pulse">
@@ -1390,19 +1484,17 @@ export default function App() {
                       {requiredSwipe === 'LEFT' ? '1/3: Charisse Solo Lunge' : requiredSwipe === 'RIGHT' ? '2/3: Ray Cross-Slash' : '3/3: Synchronized Final Strike!'}
                     </p>
 
-                    {/* 3-Second Timer Bar */}
                     <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-1">
                       <div 
                         className="bg-gradient-to-r from-red-500 via-yellow-400 to-emerald-400 h-full transition-all duration-75"
                         style={{ width: `${swipeTimer}%` }}
                       />
                     </div>
-                    <span className="text-[9px] text-slate-400 font-pixel">3.0s WINDOW</span>
                   </div>
                 </div>
               )}
 
-              {/* Critical Health Mini-game: Calibrated & Slower */}
+              {/* Standard Needle Healing Minigame */}
               {showNeedleMinigame && (
                 <div className="absolute inset-0 z-40 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-3 animate-fade-in">
                   <div className="bg-slate-900 border-2 border-red-500/90 rounded-2xl p-3.5 w-full max-w-[260px] flex flex-col items-center text-center shadow-2xl">
@@ -1413,7 +1505,6 @@ export default function App() {
                       Stop the needle in the green zone to heal!
                     </p>
 
-                    {/* Expanded 40% Green Sweet Spot */}
                     <div className="relative w-11 h-40 bg-slate-950 border-2 border-slate-700 rounded-full overflow-hidden my-1 flex items-center justify-center shadow-inner">
                       <div className="absolute top-[30%] h-[40%] w-full bg-emerald-500/35 border-y-2 border-emerald-400 flex items-center justify-center">
                         <span className="font-pixel text-[7px] text-emerald-300">HEAL</span>
@@ -1494,7 +1585,7 @@ export default function App() {
                   />
                 </div>
                 <button
-                  disabled={synergy < 100 || isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || finalBossIntro}
+                  disabled={synergy < 100 || isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive}
                   onClick={executeUltimate}
                   className={`font-pixel text-[7px] px-2 py-0.5 rounded transition-all ${
                     synergy >= 100 
@@ -1506,10 +1597,10 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 4-Button Grid */}
+              {/* 4-Button Action Grid */}
               <div className="grid grid-cols-2 gap-1.5">
                 <button
-                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || finalBossIntro}
+                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive}
                   onClick={() => initiateAttack('comm')}
                   className="bg-pink-600 hover:bg-pink-500 disabled:opacity-40 py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md shadow-pink-600/30 text-left"
                 >
@@ -1521,7 +1612,7 @@ export default function App() {
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || finalBossIntro}
+                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive}
                   onClick={() => initiateAttack('food')}
                   className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md shadow-emerald-600/30 text-left"
                 >
@@ -1533,7 +1624,7 @@ export default function App() {
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || finalBossIntro}
+                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive}
                   onClick={() => initiateAttack('hug')}
                   className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md shadow-purple-600/30 text-left"
                 >
@@ -1545,14 +1636,14 @@ export default function App() {
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || finalBossIntro}
+                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive}
                   onClick={executeHeal}
                   className="bg-sky-600 hover:bg-sky-500 disabled:opacity-40 py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md shadow-sky-600/30 text-left"
                 >
                   <span className="text-base">🧋</span>
                   <div>
                     <div className="font-pixel text-[7px]">WARM MILK TEA</div>
-                    <div className="text-[9px] text-sky-200/80">+35 Team HP</div>
+                    <div className="text-[9px] text-sky-200/80">+30 Team HP</div>
                   </div>
                 </button>
               </div>
@@ -1563,11 +1654,11 @@ export default function App() {
         {/* ================= SCREEN 3: GAME OVER ================= */}
         {gameState === 'gameover' && (
           <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-black/95 animate-fade-in gap-3">
-            <Skull size={38} className="text-red-500 animate-bounce" />
+            <Skull size={42} className="text-red-500 animate-bounce" />
             <div>
-              <h2 className="font-pixel text-base text-red-500 tracking-wider">GAME OVER</h2>
+              <h2 className="font-pixel text-base text-red-500 tracking-wider">YOU WERE SLAIN</h2>
               <p className="text-[11px] text-slate-400 mt-1.5 max-w-[240px] leading-relaxed">
-                The monster overwhelmed you! Match its weakness and finish each step of the combo!
+                The killer was too fast! Watch the circle closely and stop the needle directly on the white marker!
               </p>
             </div>
 
@@ -1595,9 +1686,9 @@ export default function App() {
             
             <div className="w-full flex flex-col items-center pt-0.5">
               <span className="font-pixel text-[8px] text-yellow-300 bg-yellow-950/70 border border-yellow-600/60 px-3 py-0.5 rounded-full flex items-center gap-1.5 shadow-md animate-bounce">
-                <Trophy size={11} /> CAMPAIGN CLEARED!
+                <Trophy size={11} /> 4-STAGE NIGHTMARE CONQUERED!
               </span>
-              <h2 className="font-pixel text-xs text-pink-200 mt-1.5">LEVEL 4 RELATIONSHIP UNLOCKED ✨</h2>
+              <h2 className="font-pixel text-xs text-pink-200 mt-1.5">TRUE LOVE SURVIVOR UNLOCKED ✨</h2>
               <p className="text-[10px] text-pink-300/80 mt-0.5">Happy 4-Month Anniversary, Charisse! ❤️</p>
             </div>
 
@@ -1631,12 +1722,12 @@ export default function App() {
 
               <div className="flex items-center justify-center gap-1 my-0.5 text-rose-400">
                 <Heart size={14} fill="#f43f5e" />
-                <span className="font-pixel text-[8px] text-pink-200">OFFICIAL REWARD SCROLL</span>
+                <span className="font-pixel text-[8px] text-pink-200">OFFICIAL SURVIVOR SCROLL</span>
                 <Heart size={14} fill="#f43f5e" />
               </div>
 
               <p className="text-[10.5px] text-slate-200 font-medium leading-relaxed px-1 mt-0.5">
-                Thank you for being my constant warmth, biggest cheerleader, and loving partner through everything. Here's to countless more months and adventures together!
+                Not even blood rain, dark phantoms, or lethal killers could break our bond. Thank you for being the sweetest partner, best gaming companion, and love of my life!
               </p>
 
               <div className="mt-1.5 font-pixel text-[8px] text-emerald-400 bg-emerald-950/70 border border-emerald-500/60 py-1 px-1.5 rounded-lg">
@@ -1648,7 +1739,7 @@ export default function App() {
               onClick={() => resetCampaign(false)}
               className="text-[9.5px] text-pink-300/70 hover:text-white flex items-center gap-1 py-0.5 mt-0.5"
             >
-              <RefreshCw size={11} /> Play Quest Again
+              <RefreshCw size={11} /> Play Nightmare Again
             </button>
 
           </div>
