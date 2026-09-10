@@ -48,6 +48,10 @@ export default function App() {
   const [circleAngle, setCircleAngle] = useState(0);
   const [circleTargetAngle, setCircleTargetAngle] = useState(180);
 
+  // Slow-Mo Matrix Shield Parry System (Stage 5)
+  const [showParryModal, setShowParryModal] = useState(false);
+  const [parryRingScale, setParryRingScale] = useState(2.3);
+
   const [pendingAction, setPendingAction] = useState(null);
 
   // Starlight Capsule Healing & Trivia
@@ -61,11 +65,11 @@ export default function App() {
   const [bossFlash, setBossFlash] = useState(false);
   const [activePolaroid, setActivePolaroid] = useState(0);
 
-  // Animation Refs - Explicitly Initialized
+  // Canvas Refs & Coordinates
   const animRef = useRef({
-    p1: { x: 22, y: 138, scale: 1 },
-    p2: { x: 64, y: 152, scale: 1 },
-    boss: { x: 96, y: 34, scale: 1, squashY: 1, recoilX: 0, recoilY: 0 },
+    p1: { x: 25, y: 140, scale: 1 },
+    p2: { x: 65, y: 152, scale: 1 },
+    boss: { x: 96, y: 38, scale: 1, squashY: 1, recoilX: 0, recoilY: 0 },
     slashEffects: [],
     impactWaves: [],
     cutsceneWalkOffset: 0,
@@ -81,6 +85,7 @@ export default function App() {
   const qteTimerRef = useRef(null);
   const subQteTimerRef = useRef(null);
   const defenseIntervalRef = useRef(null);
+  const parryTimerRef = useRef(null);
   const circleAnimRef = useRef(null);
   const circleAngleRef = useRef(0);
 
@@ -363,10 +368,10 @@ export default function App() {
 
   // Kinematic Motion Animations
   const animateCharisseCharge = (callback) => {
-    const originX = 22;
-    const originY = 138;
+    const originX = 25;
+    const originY = 140;
     const targetX = 92;
-    const targetY = 48;
+    const targetY = 50;
     const startTime = Date.now();
     const duration = 340;
 
@@ -403,10 +408,10 @@ export default function App() {
   };
 
   const animateRayCrossCharge = (callback) => {
-    const originX = 64;
+    const originX = 65;
     const originY = 152;
     const targetX = 98;
-    const targetY = 52;
+    const targetY = 54;
     const startTime = Date.now();
     const duration = 340;
 
@@ -444,8 +449,8 @@ export default function App() {
 
   const animateBossLungeAttack = (callback) => {
     const originX = 96;
-    const originY = 34;
-    const targetX = 38;
+    const originY = 38;
+    const targetX = 40;
     const targetY = 120;
     const startTime = Date.now();
     const duration = 480;
@@ -478,7 +483,7 @@ export default function App() {
     }, 16);
   };
 
-  // Friday the 13th Dial Animation (Stage 4)
+  // Friday the 13th Wheel (Stage 4)
   useEffect(() => {
     if (!showFatalCircle) return;
     circleAngleRef.current = 0;
@@ -532,6 +537,74 @@ export default function App() {
       } else {
         setIsTurnLocked(false);
       }
+    }
+  };
+
+  // Slow-Mo Matrix Shield Parry System (Stage 5)
+  const triggerMatrixParry = () => {
+    setIsTurnLocked(true);
+    setShowParryModal(true);
+    setParryRingScale(2.3);
+    playSound(380, 'sine', 0.15);
+
+    const start = Date.now();
+    const duration = 1350;
+
+    if (parryTimerRef.current) clearInterval(parryTimerRef.current);
+
+    parryTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const progress = elapsed / duration;
+      const newScale = Math.max(0.4, 2.3 - progress * 1.9);
+      setParryRingScale(newScale);
+
+      if (progress >= 1) {
+        clearInterval(parryTimerRef.current);
+        handleParryFailure();
+      }
+    }, 16);
+  };
+
+  const handleParrySuccess = () => {
+    if (parryTimerRef.current) clearInterval(parryTimerRef.current);
+    setShowParryModal(false);
+
+    const isGoodTiming = parryRingScale >= 0.75 && parryRingScale <= 1.35;
+
+    if (isGoodTiming) {
+      playSound(900, 'triangle', 0.25);
+      setBossFlash(true);
+      setScreenShake(true);
+      triggerSlashVFX('dual', 100, 50);
+      setTimeout(() => {
+        setBossFlash(false);
+        setScreenShake(false);
+      }, 300);
+
+      addFloatingText("MATRIX PARRY! 🛡️", 35, 110, '#38bdf8');
+      setBattleLog("✨ Ray & Charisse parried the incoming strike together!");
+      setSynergy((prev) => Math.min(100, prev + 40));
+      setIsTurnLocked(false);
+    } else {
+      handleParryFailure();
+    }
+  };
+
+  const handleParryFailure = () => {
+    if (parryTimerRef.current) clearInterval(parryTimerRef.current);
+    setShowParryModal(false);
+    playSound(140, 'sawtooth', 0.3);
+    
+    const damage = 28;
+    const remainingHp = Math.max(0, playerHp - damage);
+    setPlayerHp(remainingHp);
+    addFloatingText(`-${damage} HP`, 35, 120, '#ef4444');
+    setBattleLog("⚠️ Parry mistimed! Guard broken!");
+
+    if (remainingHp <= 0) {
+      setTimeout(() => setGameState('gameover'), 600);
+    } else {
+      setIsTurnLocked(false);
     }
   };
 
@@ -597,7 +670,7 @@ export default function App() {
     }
   };
 
-  // Starlight Capsule Healing System
+  // Starlight Capsule Healing
   const openCapsuleHeal = () => {
     setIsTurnLocked(true);
     setShowCapsuleHeal(true);
@@ -638,9 +711,9 @@ export default function App() {
     setIsTurnLocked(false);
   };
 
-  // Turn Execution System
+  // Turn Execution
   const initiateAttack = (actionKey) => {
-    if (isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle) return;
+    if (isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle || showParryModal) return;
     setAttackWarning("");
     setPendingAction(actionKey);
     setQteScale(2.3);
@@ -862,7 +935,7 @@ export default function App() {
   };
 
   const executeHeal = () => {
-    if (isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle) return;
+    if (isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle || showParryModal) return;
     setIsTurnLocked(true);
     setAttackWarning("");
     playSound(580, 'sine', 0.2);
@@ -874,7 +947,7 @@ export default function App() {
   };
 
   const executeUltimate = () => {
-    if (synergy < 100 || isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle) return;
+    if (synergy < 100 || isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle || showParryModal) return;
     setIsTurnLocked(true);
     setAttackWarning("");
     setSynergy(0);
@@ -910,14 +983,14 @@ export default function App() {
 
     // Dynamic Kinematic Boss Lunge
     animateBossLungeAttack(() => {
+      // Stage 5 Slow-Mo Matrix Parry
+      if (phase === 5 && Math.random() < 0.65) {
+        triggerMatrixParry();
+        return;
+      }
       // Stage 4 Friday the 13th Wheel
       if (phase === 4 && (bossHp <= 150 || Math.random() < 0.65)) {
         triggerFatalCircle();
-        return;
-      }
-      // Stage 5 In-World Quick Parry
-      if (phase === 5 && Math.random() < 0.65) {
-        spawnQuickDefense('parry');
         return;
       }
       // Stage 3 In-World Slide Evade
@@ -1006,6 +1079,7 @@ export default function App() {
     setBossIntro(false);
     setJumpscareActive(false);
     setShowFatalCircle(false);
+    setShowParryModal(false);
     setShowCapsuleHeal(false);
     setShowTriviaModal(false);
     setQuickDefense(null);
@@ -1020,6 +1094,7 @@ export default function App() {
     }
   };
 
+  // Preserved Love Letters
   const polaroids = [
     {
       caption: "Thank You for Healing My Knee 🩹",
@@ -1037,6 +1112,511 @@ export default function App() {
       emoji: "🎮"
     }
   ];
+
+  // Procedural Pixel Drawing Helpers (Trees, Rocks, Flowers, Characters)
+  const drawPineTree = (ctx, x, y, scale = 1, mood = 'cute') => {
+    const isCorrupt = mood === 'dark' || mood === 'apocalypse';
+    ctx.fillStyle = isCorrupt ? (mood === 'apocalypse' ? '#0a0005' : '#1a0505') : '#3e2723';
+    ctx.fillRect(x + 5 * scale, y + 24 * scale, 4 * scale, 8 * scale);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(x + 7 * scale, y + 32 * scale, 8 * scale, 3 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = isCorrupt ? (mood === 'apocalypse' ? '#2d0612' : '#3b0707') : '#14532d';
+    ctx.fillRect(x + 1 * scale, y + 16 * scale, 12 * scale, 9 * scale);
+    ctx.fillStyle = isCorrupt ? (mood === 'apocalypse' ? '#4a041f' : '#500724') : '#166534';
+    ctx.fillRect(x + 2 * scale, y + 17 * scale, 10 * scale, 6 * scale);
+    ctx.fillStyle = isCorrupt ? (mood === 'apocalypse' ? '#450a0a' : '#450a0a') : '#15803d';
+    ctx.fillRect(x + 3 * scale, y + 9 * scale, 8 * scale, 8 * scale);
+    ctx.fillStyle = isCorrupt ? (mood === 'apocalypse' ? '#70092b' : '#7f1d1d') : '#22c55e';
+    ctx.fillRect(x + 4 * scale, y + 10 * scale, 6 * scale, 5 * scale);
+  };
+
+  const drawMossyRock = (ctx, x, y, w = 16, h = 10, mood = 'cute') => {
+    const isCorrupt = mood === 'dark' || mood === 'apocalypse';
+    ctx.fillStyle = isCorrupt ? '#1a0404' : '#475569';
+    ctx.fillRect(x + 2, y + 2, w - 4, h - 2);
+    ctx.fillRect(x, y + 4, w, h - 4);
+    ctx.fillStyle = isCorrupt ? '#7f1d1d' : '#22c55e';
+    ctx.fillRect(x + 3, y + 1, 6, 3);
+  };
+
+  const drawFlowerTuft = (ctx, x, y, color = '#f43f5e') => {
+    ctx.fillStyle = '#15803d';
+    ctx.fillRect(x, y + 2, 2, 4);
+    ctx.fillRect(x + 3, y + 1, 2, 5);
+    ctx.fillStyle = color;
+    ctx.fillRect(x - 1, y, 3, 3);
+    ctx.fillRect(x + 3, y - 1, 3, 3);
+    ctx.fillStyle = '#fef08a';
+    ctx.fillRect(x, y + 1, 1, 1);
+  };
+
+  const drawCuteCharisse = (ctx, x, y) => {
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(x + 11, y + 30, 9, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#3a1f11';
+    ctx.fillRect(x + 2, y + 6, 17, 18);
+    ctx.fillRect(x + 1, y + 12, 19, 11);
+
+    ctx.fillStyle = '#f43f5e';
+    ctx.fillRect(x + 1, y + 3, 4, 4);
+    ctx.fillRect(x + 16, y + 3, 4, 4);
+
+    ctx.fillStyle = '#ffd7ba';
+    ctx.fillRect(x + 5, y + 5, 11, 9);
+
+    ctx.fillStyle = '#2b1408';
+    ctx.fillRect(x + 7, y + 8, 3, 4);
+    ctx.fillRect(x + 12, y + 8, 3, 4);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x + 7, y + 8, 1, 2);
+    ctx.fillRect(x + 12, y + 8, 1, 2);
+
+    ctx.fillStyle = '#f472b6';
+    ctx.fillRect(x + 5, y + 14, 11, 10);
+    ctx.fillStyle = '#fbcfe8';
+    ctx.fillRect(x + 7, y + 15, 7, 8);
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(x + 5, y + 23, 11, 2);
+
+    ctx.fillStyle = '#831843';
+    ctx.fillRect(x + 6, y + 25, 4, 4);
+    ctx.fillRect(x + 11, y + 25, 4, 4);
+
+    ctx.fillStyle = '#78350f';
+    ctx.fillRect(x + 18, y + 7, 2, 21);
+    ctx.fillStyle = '#ec4899';
+    ctx.fillRect(x + 16, y + 3, 6, 5);
+  };
+
+  const drawCuteRay = (ctx, x, y) => {
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(x + 11, y + 30, 9, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#171717';
+    ctx.fillRect(x + 4, y + 2, 13, 5);
+    ctx.fillRect(x + 3, y + 4, 15, 4);
+
+    ctx.fillStyle = '#ffd7ba';
+    ctx.fillRect(x + 5, y + 6, 11, 8);
+
+    ctx.fillStyle = '#171717';
+    ctx.fillRect(x + 7, y + 9, 2, 3);
+    ctx.fillRect(x + 12, y + 9, 2, 3);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x + 7, y + 9, 1, 1);
+    ctx.fillRect(x + 12, y + 9, 1, 1);
+
+    ctx.fillStyle = '#1d4ed8';
+    ctx.fillRect(x + 4, y + 14, 13, 10);
+    ctx.fillStyle = '#3b82f6';
+    ctx.fillRect(x + 6, y + 15, 9, 8);
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(x + 2, y + 15, 3, 11);
+
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(x + 6, y + 25, 4, 4);
+    ctx.fillRect(x + 11, y + 25, 4, 4);
+
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(x + 19, y + 5, 2, 12);
+  };
+
+  // Main Canvas Render Loop
+  useEffect(() => {
+    if (gameState !== 'battle') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    let frameId;
+    let tick = 0;
+
+    const render = () => {
+      tick++;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const skyGradients = [
+        ['#38bdf8', '#0284c7'], // Stage 1: Sunny Meadow
+        ['#f97316', '#0f766e'], // Stage 2: Sunset Canyon
+        ['#1e1b4b', '#312e81'], // Stage 3: Rainy Twilight Peak
+        ['#280205', '#0c0002'], // Stage 4: Blood Fog Forest
+        ['#08000f', '#240026']  // Stage 5: Void Abyss Rift
+      ];
+      const curSky = skyGradients[phase - 1] || skyGradients[0];
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, 100);
+      skyGrad.addColorStop(0, curSky[0]);
+      skyGrad.addColorStop(1, curSky[1]);
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, 160, 240);
+
+      const mood = phase >= 5 ? 'apocalypse' : (phase >= 3 ? 'dark' : 'cute');
+
+      // Arena Layouts
+      if (phase === 1) {
+        drawPineTree(ctx, 4, 42, 0.9, mood);
+        drawPineTree(ctx, 22, 38, 1.1, mood);
+        drawPineTree(ctx, 60, 36, 1.0, mood);
+        drawPineTree(ctx, 134, 40, 0.95, mood);
+
+        ctx.fillStyle = '#14532d';
+        ctx.beginPath();
+        ctx.moveTo(0, 95);
+        ctx.lineTo(160, 65);
+        ctx.lineTo(160, 240);
+        ctx.lineTo(0, 240);
+        ctx.fill();
+
+        ctx.fillStyle = '#334155';
+        ctx.beginPath();
+        ctx.moveTo(20, 120);
+        ctx.lineTo(145, 90);
+        ctx.lineTo(135, 215);
+        ctx.lineTo(10, 215);
+        ctx.fill();
+
+        drawFlowerTuft(ctx, 12, 145, '#f43f5e');
+        drawFlowerTuft(ctx, 138, 115, '#fbbf24');
+        drawFlowerTuft(ctx, 128, 205, '#ec4899');
+        drawFlowerTuft(ctx, 22, 220, '#60a5fa');
+      } else if (phase === 2) {
+        drawMossyRock(ctx, 10, 70, 34, 20, mood);
+        drawMossyRock(ctx, 120, 75, 28, 16, mood);
+
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath();
+        ctx.moveTo(0, 85);
+        ctx.lineTo(160, 95);
+        ctx.lineTo(160, 240);
+        ctx.lineTo(0, 240);
+        ctx.fill();
+
+        ctx.fillStyle = '#b45309';
+        ctx.beginPath();
+        ctx.moveTo(15, 110);
+        ctx.lineTo(145, 110);
+        ctx.lineTo(130, 230);
+        ctx.lineTo(30, 230);
+        ctx.fill();
+      } else if (phase === 3) {
+        drawPineTree(ctx, 6, 32, 1.0, mood);
+        drawPineTree(ctx, 136, 36, 0.9, mood);
+
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.moveTo(-10, 80);
+        ctx.lineTo(80, 50);
+        ctx.lineTo(170, 90);
+        ctx.lineTo(170, 240);
+        ctx.lineTo(-10, 240);
+        ctx.fill();
+
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.moveTo(25, 130);
+        ctx.lineTo(135, 95);
+        ctx.lineTo(125, 215);
+        ctx.lineTo(15, 215);
+        ctx.fill();
+      } else if (phase === 4) {
+        drawPineTree(ctx, 2, 40, 1.1, mood);
+        drawPineTree(ctx, 24, 34, 0.95, mood);
+        drawPineTree(ctx, 130, 42, 1.05, mood);
+
+        ctx.fillStyle = '#180205';
+        ctx.beginPath();
+        ctx.moveTo(0, 95);
+        ctx.lineTo(160, 65);
+        ctx.lineTo(160, 240);
+        ctx.lineTo(0, 240);
+        ctx.fill();
+
+        ctx.fillStyle = '#3f070e';
+        ctx.beginPath();
+        ctx.moveTo(20, 120);
+        ctx.lineTo(145, 90);
+        ctx.lineTo(135, 215);
+        ctx.lineTo(10, 215);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#1e0024';
+        ctx.beginPath();
+        ctx.ellipse(80, 190, 65, 24, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.ellipse(115, 65, 38, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#581c87';
+        ctx.fillRect(8, 70 + Math.sin(tick * 0.1) * 8, 6, 45);
+        ctx.fillRect(146, 75 + Math.cos(tick * 0.1) * 8, 6, 45);
+      }
+
+      // Boss Display with Recoil & Squash
+      const bob = Math.sin(tick * 0.1) * (phase >= 4 ? 4 : 2);
+      const bX = (animRef.current.boss.x || 96) + animRef.current.boss.recoilX;
+      const bY = (animRef.current.boss.y || 38) + bob + animRef.current.boss.recoilY;
+
+      if (bossFlash) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(bX - 4, bY - 4, 48, 48);
+      } else {
+        if (phase === 1) {
+          ctx.fillStyle = '#4c1d95';
+          ctx.fillRect(bX + 2, bY + 6, 36, 30);
+          ctx.fillRect(bX + 8, bY, 24, 38);
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(bX + 10, bY + 14, 5, 4);
+          ctx.fillRect(bX + 24, bY + 14, 5, 4);
+        } else if (phase === 2) {
+          ctx.fillStyle = '#15803d';
+          ctx.fillRect(bX + 2, bY + 6, 34, 28);
+          ctx.fillRect(bX + 8, bY, 22, 36);
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(bX + 10, bY + 12, 5, 5);
+          ctx.fillRect(bX + 22, bY + 12, 5, 5);
+        } else if (phase === 3) {
+          ctx.fillStyle = '#9d174d';
+          ctx.fillRect(bX + 2, bY + 4, 36, 32);
+          ctx.fillStyle = '#be185d';
+          ctx.fillRect(bX + 6, bY, 28, 36);
+          ctx.fillStyle = '#facc15';
+          ctx.fillRect(bX + 10, bY + 11, 7, 4);
+          ctx.fillRect(bX + 23, bY + 11, 7, 4);
+        } else if (phase === 4) {
+          ctx.fillStyle = '#450a0a';
+          ctx.fillRect(bX - 2, bY, 44, 40);
+          ctx.fillStyle = '#7f1d1d';
+          ctx.fillRect(bX + 4, bY - 4, 32, 44);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(bX + 8, bY + 8, 8, 7);
+          ctx.fillRect(bX + 24, bY + 8, 8, 7);
+          ctx.fillStyle = '#dc2626';
+          ctx.fillRect(bX + 11, bY + 10, 3, 3);
+          ctx.fillRect(bX + 27, bY + 10, 3, 3);
+        } else {
+          ctx.fillStyle = '#1e0024';
+          ctx.fillRect(bX - 8, bY - 12, 56, 56);
+          ctx.fillStyle = '#4a0058';
+          ctx.fillRect(bX - 4, bY - 8, 48, 50);
+          ctx.fillStyle = Math.sin(tick * 0.2) > 0 ? '#ff0055' : '#7700ff';
+          ctx.fillRect(bX + 14, bY + 16, 12, 12);
+          ctx.fillStyle = '#facc15';
+          ctx.fillRect(bX + 2, bY, 6, 3);
+          ctx.fillRect(bX + 32, bY, 6, 3);
+          ctx.fillStyle = '#ff0033';
+          ctx.fillRect(bX + 8, bY + 7, 8, 3);
+          ctx.fillRect(bX + 24, bY + 7, 8, 3);
+        }
+      }
+
+      // Render Dynamic Kinematic Character Sprites
+      const p1Pos = animRef.current.p1 || { x: 25, y: 140 };
+      const p2Pos = animRef.current.p2 || { x: 65, y: 152 };
+      drawCuteCharisse(ctx, p1Pos.x, p1Pos.y);
+      drawCuteRay(ctx, p2Pos.x, p2Pos.y);
+
+      // Render Visual Slash VFX & Impact Shockwaves
+      const slashes = animRef.current.slashEffects;
+      for (let i = slashes.length - 1; i >= 0; i--) {
+        const s = slashes[i];
+        ctx.save();
+        if (s.type === 'cerce') {
+          ctx.strokeStyle = '#f472b6';
+          ctx.lineWidth = 3.5;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, 14 + s.frame * 2.2, Math.PI * 0.7, Math.PI * 1.6);
+          ctx.stroke();
+
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, 12 + s.frame * 2.2, Math.PI * 0.75, Math.PI * 1.55);
+          ctx.stroke();
+        } else if (s.type === 'ray') {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(s.x - 18, s.y - 18);
+          ctx.lineTo(s.x + 18, s.y + 18);
+          ctx.moveTo(s.x + 18, s.y - 18);
+          ctx.lineTo(s.x - 18, s.y + 18);
+          ctx.stroke();
+
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(s.x - 14, s.y - 14);
+          ctx.lineTo(s.x + 14, s.y + 14);
+          ctx.moveTo(s.x + 14, s.y - 14);
+          ctx.lineTo(s.x - 14, s.y + 14);
+          ctx.stroke();
+        } else if (s.type === 'dual') {
+          ctx.fillStyle = s.frame % 2 === 0 ? 'rgba(254, 240, 138, 0.7)' : 'rgba(244, 114, 182, 0.7)';
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.frame * 3.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.5;
+          for (let ray = 0; ray < 6; ray++) {
+            const angle = ray * (Math.PI / 3);
+            ctx.beginPath();
+            ctx.moveTo(s.x, s.y);
+            ctx.lineTo(s.x + Math.cos(angle) * (s.frame * 4), s.y + Math.sin(angle) * (s.frame * 4));
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+
+        s.frame++;
+        if (s.frame >= s.maxFrames) slashes.splice(i, 1);
+      }
+
+      // Rain / Blood Weather
+      if (phase >= 3) {
+        ctx.strokeStyle = phase >= 4 ? 'rgba(239, 68, 68, 0.7)' : 'rgba(186, 230, 253, 0.45)';
+        ctx.lineWidth = phase >= 4 ? 1.5 : 1;
+        animRef.current.rainDrops.forEach((drop) => {
+          ctx.beginPath();
+          ctx.moveTo(drop.x, drop.y);
+          ctx.lineTo(drop.x - 2, drop.y + drop.length);
+          ctx.stroke();
+
+          drop.y += drop.speed;
+          drop.x -= 0.6;
+          if (drop.y > 240) {
+            drop.y = -5;
+            drop.x = Math.random() * 165;
+          }
+        });
+
+        if (phase === 5 && Math.random() < 0.05) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
+          ctx.fillRect(0, 0, 160, 240);
+        }
+      }
+
+      // Floating Texts
+      const fts = animRef.current.floatingTexts;
+      for (let i = fts.length - 1; i >= 0; i--) {
+        const ft = fts[i];
+        ctx.fillStyle = ft.color;
+        ctx.font = '7px "Press Start 2P"';
+        ctx.fillText(ft.text, ft.x, ft.y);
+        ft.y -= 0.6;
+        ft.life--;
+        if (ft.life <= 0) fts.splice(i, 1);
+      }
+
+      frameId = requestAnimationFrame(render);
+    };
+
+    render();
+    return () => cancelAnimationFrame(frameId);
+  }, [gameState, phase, bossFlash]);
+
+  // Epilogue Sunset Cutscene Canvas Loop
+  useEffect(() => {
+    if (gameState !== 'cutscene') return;
+    const canvas = cutsceneCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    let frameId;
+    let tick = 0;
+
+    const renderCutscene = () => {
+      tick++;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, 140);
+      skyGrad.addColorStop(0, '#f97316');
+      skyGrad.addColorStop(0.5, '#fb923c');
+      skyGrad.addColorStop(1, '#fde047');
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, 160, 240);
+
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.9)';
+      ctx.beginPath();
+      ctx.arc(80, 85, 26 + Math.sin(tick * 0.05) * 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.moveTo(0, 125);
+      ctx.quadraticCurveTo(80, 110, 160, 130);
+      ctx.lineTo(160, 240);
+      ctx.lineTo(0, 240);
+      ctx.fill();
+
+      ctx.fillStyle = '#16a34a';
+      ctx.beginPath();
+      ctx.moveTo(0, 145);
+      ctx.quadraticCurveTo(80, 135, 160, 150);
+      ctx.lineTo(160, 240);
+      ctx.lineTo(0, 240);
+      ctx.fill();
+
+      for (let f = 8; f < 155; f += 16) {
+        ctx.fillStyle = f % 2 === 0 ? '#f43f5e' : '#ec4899';
+        ctx.fillRect(f, 195 + (f % 5), 3, 3);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(f + 1, 196 + (f % 5), 1, 1);
+      }
+
+      ctx.fillStyle = 'rgba(244, 114, 182, 0.8)';
+      animRef.current.petals.forEach((p) => {
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, p.size, p.size * 0.6, Math.PI / 4, 0, Math.PI * 2);
+        ctx.fill();
+        p.y += p.speedY;
+        p.x += p.speedX;
+        if (p.y > 240) {
+          p.y = -5;
+          p.x = Math.random() * 160;
+        }
+      });
+
+      const walkOffset = animRef.current.cutsceneWalkOffset;
+      if (cutsceneCharsFaded) {
+        animRef.current.cutsceneWalkOffset += 0.4;
+      }
+
+      const p1X = 54 + walkOffset;
+      const p2X = 82 + walkOffset;
+      const walkBob = Math.sin(tick * 0.15) * 1.5;
+
+      ctx.save();
+      if (cutsceneCharsFaded && walkOffset > 25) {
+        ctx.globalAlpha = Math.max(0, 1 - (walkOffset - 25) / 20);
+      }
+
+      drawCuteCharisse(ctx, p1X, 145 + walkBob);
+      drawCuteRay(ctx, p2X, 145 + walkBob);
+
+      ctx.fillStyle = '#f43f5e';
+      ctx.font = '12px "Press Start 2P"';
+      ctx.fillText("❤️", 72 + walkOffset, 138 + Math.sin(tick * 0.1) * 2);
+
+      ctx.restore();
+
+      frameId = requestAnimationFrame(renderCutscene);
+    };
+
+    renderCutscene();
+    return () => cancelAnimationFrame(frameId);
+  }, [gameState, cutsceneCharsFaded]);
 
   return (
     <div className="w-full h-[100dvh] flex items-center justify-center font-cozy text-white select-none bg-black overflow-hidden p-0">
@@ -1152,17 +1732,18 @@ export default function App() {
         {gameState === 'battle' && (
           <div className="w-full h-full flex flex-col justify-between relative overflow-hidden">
             
-            <div className="relative flex-1 w-full bg-slate-900 overflow-hidden">
+            {/* Dedicated Explicit Arena Viewport */}
+            <div className="relative flex-1 w-full overflow-hidden bg-slate-950">
               <canvas
                 ref={canvasRef}
                 width={160}
                 height={240}
-                className="w-full h-full"
+                className="absolute inset-0 w-full h-full"
                 style={{ imageRendering: 'pixelated' }}
               />
 
               {/* Top Left: Stage Badge + Sound Toggle Group */}
-              <div className="absolute top-2 left-2 z-40 flex items-center gap-1.5">
+              <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5">
                 <div className={`border px-2 py-1 rounded-md font-pixel text-[7.5px] shadow-md ${
                   phase === 5 ? 'bg-purple-950/90 border-purple-500 text-purple-300 animate-pulse' : 'bg-black/80 border-slate-700 text-yellow-300'
                 }`}>
@@ -1200,7 +1781,7 @@ export default function App() {
               </div>
 
               {/* Team Health Bar */}
-              <div className="absolute bottom-2 left-2 bg-black/85 border border-slate-700 p-1.5 rounded-lg w-38 shadow-lg">
+              <div className="absolute bottom-2 left-2 z-30 bg-black/85 border border-slate-700 p-1.5 rounded-lg w-38 shadow-lg">
                 <div className="flex justify-between font-pixel text-[7.5px] text-emerald-400 mb-0.5">
                   <span className="flex items-center gap-1">
                     <HeartPulse size={9} className={playerHp <= 55 ? 'text-red-400 animate-spin' : ''} />
@@ -1235,7 +1816,7 @@ export default function App() {
 
               {/* IN-WORLD SLIDE EVADE SECTION */}
               {quickDefense && quickDefense.type === 'slide' && (
-                <div className="absolute bottom-20 left-6 right-6 z-50 bg-black/85 border-2 border-emerald-400 p-2.5 rounded-2xl shadow-[0_0_20px_#34d399] flex flex-col items-center animate-fade-in">
+                <div className="absolute bottom-16 left-6 right-6 z-50 bg-black/85 border-2 border-emerald-400 p-2.5 rounded-2xl shadow-[0_0_20px_#34d399] flex flex-col items-center animate-fade-in">
                   <div className="flex items-center justify-between w-full font-pixel text-[7.5px] text-emerald-300 mb-1">
                     <span className="flex items-center gap-1"><Wind size={11} /> SLIDE TO DODGE!</span>
                     <span>{Math.round(quickDefense.progress)}%</span>
@@ -1319,6 +1900,42 @@ export default function App() {
                 </div>
               )}
 
+              {/* SLOW-MO MATRIX SHIELD PARRY MODAL (STAGE 5) */}
+              {showParryModal && (
+                <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+                  <div className="bg-slate-950 border-2 border-cyan-400 rounded-2xl p-4 flex flex-col items-center max-w-[280px] w-full text-center shadow-[0_0_25px_rgba(34,211,238,0.7)] animate-shake">
+                    <span className="font-pixel text-[8px] text-cyan-300 bg-cyan-950 border border-cyan-700 px-2.5 py-0.5 rounded-full mb-2 flex items-center gap-1">
+                      <Shield size={11} className="text-cyan-400" /> SLOW-MO MATRIX PARRY!
+                    </span>
+                    <p className="text-[11px] text-slate-200 font-semibold mb-3">
+                      Tap when the shrinking ring hits the shield!
+                    </p>
+
+                    <div className="relative w-28 h-28 flex items-center justify-center my-1">
+                      <div className="w-14 h-14 rounded-full border-4 border-cyan-400 bg-cyan-500/20 flex items-center justify-center shadow-[0_0_15px_#22d3ee]">
+                        <Shield size={22} className="text-cyan-300 animate-pulse" />
+                      </div>
+
+                      <div 
+                        className="absolute rounded-full border-4 border-yellow-400 pointer-events-none"
+                        style={{
+                          width: '56px',
+                          height: '56px',
+                          transform: `scale(${parryRingScale})`,
+                        }}
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleParrySuccess}
+                      className="w-full mt-3 font-pixel text-[9.5px] bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-slate-950 font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-all"
+                    >
+                      SHIELD PARRY! 🛡️
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* STARLIGHT CAPSULE HEALING */}
               {showCapsuleHeal && (
                 <div className="absolute inset-0 z-40 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-fade-in">
@@ -1354,7 +1971,7 @@ export default function App() {
               {qteStep === 'timed' && (
                 <div 
                   onClick={handleQTETimedTap}
-                  className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/45 backdrop-blur-[1px] cursor-pointer"
+                  className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/45 backdrop-blur-[1px] cursor-pointer"
                 >
                   <div className="relative w-24 h-24 flex items-center justify-center">
                     <div className="w-12 h-12 rounded-full border-4 border-yellow-400 animate-pulse flex items-center justify-center font-pixel text-[8px] text-yellow-300">
@@ -1373,7 +1990,7 @@ export default function App() {
 
               {/* Step 2: Rapid Mash Heart */}
               {qteStep === 'mash' && (
-                <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/55 backdrop-blur-[1px] p-3">
+                <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/55 backdrop-blur-[1px] p-3">
                   <div className="bg-slate-900 border-2 border-pink-500 rounded-2xl p-3 flex flex-col items-center max-w-[240px] w-full text-center shadow-2xl">
                     <span className="font-pixel text-[7.5px] text-yellow-300 mb-0.5">STEP 2: RAPID MASH!</span>
                     <p className="text-[11px] text-pink-200 mb-2 font-semibold">Tap repeatedly to fill the heart!</p>
@@ -1412,7 +2029,7 @@ export default function App() {
                   onTouchEnd={handlePointerUp}
                   onMouseDown={handlePointerDown}
                   onMouseUp={handlePointerUp}
-                  className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[1px] p-3 cursor-grab"
+                  className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/60 backdrop-blur-[1px] p-3 cursor-grab"
                 >
                   <div className="bg-slate-900 border-2 border-cyan-400 rounded-2xl p-4 flex flex-col items-center max-w-[270px] w-full text-center shadow-2xl pointer-events-none animate-fade-in">
                     <span className="font-pixel text-[8px] text-yellow-300 mb-1">INJUSTICE COMBO FINISHER</span>
@@ -1452,7 +2069,7 @@ export default function App() {
 
               {/* Trivia Modal */}
               {showTriviaModal && (
-                <div className="absolute inset-0 z-40 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 animate-fade-in">
+                <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 animate-fade-in">
                   <div className="bg-slate-900 border-2 border-pink-500 rounded-2xl p-4 w-full max-w-[290px] text-center shadow-2xl">
                     <div className="font-pixel text-[7.5px] text-pink-400 bg-pink-950/80 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 mb-1.5 border border-pink-600/50">
                       <Sparkles size={10} className="text-yellow-300" /> RAY'S LOVE TRIVIA
@@ -1504,7 +2121,7 @@ export default function App() {
                   <div className="bg-gradient-to-r from-amber-400 to-yellow-300 h-full transition-all duration-300" style={{ width: `${synergy}%` }} />
                 </div>
                 <button
-                  disabled={synergy < 100 || isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle}
+                  disabled={synergy < 100 || isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle || showParryModal}
                   onClick={executeUltimate}
                   className={`font-pixel text-[7px] px-2 py-0.5 rounded transition-all ${
                     synergy >= 100 
@@ -1519,7 +2136,7 @@ export default function App() {
               {/* 4-Button Action Grid */}
               <div className="grid grid-cols-2 gap-1.5">
                 <button
-                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle}
+                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle || showParryModal}
                   onClick={() => initiateAttack('comm')}
                   className={`py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md text-left ${
                     currentWeakness === 'comm' ? 'bg-pink-600 ring-2 ring-yellow-300 animate-pulse' : 'bg-pink-800/80 hover:bg-pink-700'
@@ -1533,7 +2150,7 @@ export default function App() {
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle}
+                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle || showParryModal}
                   onClick={() => initiateAttack('food')}
                   className={`py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md text-left ${
                     currentWeakness === 'food' ? 'bg-emerald-600 ring-2 ring-yellow-300 animate-pulse' : 'bg-emerald-800/80 hover:bg-emerald-700'
@@ -1547,7 +2164,7 @@ export default function App() {
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle}
+                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle || showParryModal}
                   onClick={() => initiateAttack('hug')}
                   className={`py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md text-left ${
                     currentWeakness === 'hug' ? 'bg-purple-600 ring-2 ring-yellow-300 animate-pulse' : 'bg-purple-800/80 hover:bg-purple-700'
@@ -1561,7 +2178,7 @@ export default function App() {
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle}
+                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle || showParryModal}
                   onClick={executeHeal}
                   className="bg-sky-600 hover:bg-sky-500 disabled:opacity-40 py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md shadow-sky-600/30 text-left"
                 >
@@ -1584,18 +2201,18 @@ export default function App() {
                 ref={cutsceneCanvasRef}
                 width={160}
                 height={240}
-                className="w-full h-full"
+                className="absolute inset-0 w-full h-full"
                 style={{ imageRendering: 'pixelated' }}
               />
 
-              <div className="absolute top-3 left-3 right-3 flex justify-center">
+              <div className="absolute top-3 left-3 right-3 flex justify-center z-30">
                 <span className="font-pixel text-[8px] text-amber-900 bg-yellow-200/90 border border-amber-400 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg animate-bounce">
                   <Sun size={12} className="text-orange-500" /> THE DARKNESS HAS CLEARED!
                 </span>
               </div>
             </div>
 
-            <div className="bg-gradient-to-t from-slate-950 via-slate-900/95 to-transparent p-4 text-center shrink-0 border-t border-amber-400/40">
+            <div className="bg-gradient-to-t from-slate-950 via-slate-900/95 to-transparent p-4 text-center shrink-0 border-t border-amber-400/40 z-30">
               {cutsceneDialogueIndex === 1 && (
                 <div className="space-y-2 animate-fade-in">
                   <div className="bg-sky-950/80 border border-sky-400/60 rounded-xl p-3 shadow-lg max-w-[320px] mx-auto">
@@ -1644,10 +2261,10 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= SCREEN 5: GAME OVER (DEAD-CENTERED FIX) ================= */}
+        {/* ================= SCREEN 5: GAME OVER (DEAD-CENTERED ON ALL PHONES) ================= */}
         {gameState === 'gameover' && (
-          <div className="w-full h-full flex flex-col justify-center items-center p-6 text-center bg-black/95 animate-fade-in gap-4">
-            <Skull size={48} className="text-red-500 animate-bounce" />
+          <div className="w-full h-full flex flex-col justify-center items-center p-6 text-center bg-black/95 animate-fade-in gap-4 my-auto">
+            <Skull size={52} className="text-red-500 animate-bounce" />
             <div>
               <h2 className="font-pixel text-base sm:text-lg text-red-500 tracking-wider">OVERWHELMED BY DARKNESS</h2>
               <p className="text-xs text-slate-400 mt-2 max-w-[260px] leading-relaxed mx-auto">
