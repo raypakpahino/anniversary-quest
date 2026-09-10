@@ -4,11 +4,11 @@ import {
   Trophy, Sparkles, HelpCircle, X, ArrowRight, 
   ShieldCheck, Zap, RefreshCw, Award, AlertTriangle, 
   Skull, HeartPulse, Volume2, VolumeX, Heart, ArrowLeft, ArrowUp, ArrowDown,
-  Sun, Shield, Wind, Sparkle, Flame, BookOpen, Swords, Crosshair
+  Sun, Shield, Wind, Sparkle, Flame, BookOpen, Swords
 } from 'lucide-react';
 
 export default function App() {
-  const [gameState, setGameState] = useState('landing');
+  const [gameState, setGameState] = useState('landing'); // 'landing' | 'instructions' | 'battle' | 'cutscene' | 'victory' | 'gameover'
   const [isMuted, setIsMuted] = useState(false);
   
   // Progressive Combat Scaling
@@ -38,14 +38,19 @@ export default function App() {
   const [swipeTimer, setSwipeTimer] = useState(100);
   const [touchStartPos, setTouchStartPos] = useState(null);
 
-  // Non-modal In-world Quick Defense Triggers
-  const [quickDefense, setQuickDefense] = useState(null); // { type: 'parry'|'dodge'|'slide', posX, posY, timer }
+  // In-World Quick Defenses
+  const [quickDefense, setQuickDefense] = useState(null); // { type, pos, progress }
   const [slideProgress, setSlideProgress] = useState(0);
   const [slideStartX, setSlideStartX] = useState(null);
 
+  // Friday the 13th Wheel (Stage 4)
+  const [showFatalCircle, setShowFatalCircle] = useState(false);
+  const [circleAngle, setCircleAngle] = useState(0);
+  const [circleTargetAngle, setCircleTargetAngle] = useState(180);
+
   const [pendingAction, setPendingAction] = useState(null);
 
-  // Redesigned Starlight Capsule Healing
+  // Starlight Capsule Healing & Trivia
   const [showCapsuleHeal, setShowCapsuleHeal] = useState(false);
   const [capsuleCharge, setCapsuleCharge] = useState(0);
   const [showTriviaModal, setShowTriviaModal] = useState(false);
@@ -56,13 +61,13 @@ export default function App() {
   const [bossFlash, setBossFlash] = useState(false);
   const [activePolaroid, setActivePolaroid] = useState(0);
 
-  // Animation Engine
+  // Animation Refs - Explicitly Initialized
   const animRef = useRef({
-    p1: { x: 22, y: 138, scale: 1, rotation: 0, trail: [] },
-    p2: { x: 64, y: 152, scale: 1, rotation: 0, trail: [] },
+    p1: { x: 22, y: 138, scale: 1 },
+    p2: { x: 64, y: 152, scale: 1 },
     boss: { x: 96, y: 34, scale: 1, squashY: 1, recoilX: 0, recoilY: 0 },
-    slashEffects: [], // { type, x, y, frame, maxFrames }
-    impactWaves: [],  // { x, y, radius, color, life }
+    slashEffects: [],
+    impactWaves: [],
     cutsceneWalkOffset: 0,
     floatingTexts: [],
     rainDrops: [],
@@ -76,6 +81,8 @@ export default function App() {
   const qteTimerRef = useRef(null);
   const subQteTimerRef = useRef(null);
   const defenseIntervalRef = useRef(null);
+  const circleAnimRef = useRef(null);
+  const circleAngleRef = useRef(0);
 
   const bosses = [
     {
@@ -147,6 +154,7 @@ export default function App() {
     setIsSurpriseWeakness(false);
   }, [phase]);
 
+  // Rain Drops and Falling Blossom Petals Initialization
   useEffect(() => {
     const drops = [];
     for (let i = 0; i < 75; i++) {
@@ -171,6 +179,7 @@ export default function App() {
     animRef.current.petals = petals;
   }, []);
 
+  // Web Audio Chiptune Synthesizer
   const initAudio = () => {
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -195,9 +204,7 @@ export default function App() {
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + dur);
-    } catch {
-      // Audio safety
-    }
+    } catch {}
   };
 
   const playHeavySlash = () => {
@@ -354,7 +361,7 @@ export default function App() {
     animRef.current.impactWaves.push({ x, y, radius: 4, color: type === 'cerce' ? '#f472b6' : '#38bdf8', life: 12 });
   };
 
-  // Kinematic Motion System
+  // Kinematic Motion Animations
   const animateCharisseCharge = (callback) => {
     const originX = 22;
     const originY = 138;
@@ -371,7 +378,6 @@ export default function App() {
         const p = t / 0.5;
         animRef.current.p1.x = originX + (targetX - originX) * p;
         animRef.current.p1.y = originY + (targetY - originY) * p;
-        animRef.current.p1.scale = 1.15;
       } else if (t < 0.7) {
         animRef.current.p1.x = targetX + Math.sin(t * 30) * 4;
         animRef.current.p1.y = targetY;
@@ -389,7 +395,6 @@ export default function App() {
         clearInterval(interval);
         animRef.current.p1.x = originX;
         animRef.current.p1.y = originY;
-        animRef.current.p1.scale = 1;
         animRef.current.boss.recoilX = 0;
         animRef.current.boss.recoilY = 0;
         if (callback) callback();
@@ -413,7 +418,6 @@ export default function App() {
         const p = t / 0.5;
         animRef.current.p2.x = originX + (targetX - originX) * p;
         animRef.current.p2.y = originY + (targetY - originY) * p;
-        animRef.current.p2.scale = 1.2;
       } else if (t < 0.7) {
         animRef.current.p2.x = targetX;
         animRef.current.p2.y = targetY;
@@ -431,7 +435,6 @@ export default function App() {
         clearInterval(interval);
         animRef.current.p2.x = originX;
         animRef.current.p2.y = originY;
-        animRef.current.p2.scale = 1;
         animRef.current.boss.recoilX = 0;
         animRef.current.boss.recoilY = 0;
         if (callback) callback();
@@ -459,8 +462,6 @@ export default function App() {
       } else if (t < 0.6) {
         animRef.current.boss.x = targetX;
         animRef.current.boss.y = targetY;
-        animRef.current.p1.x = 18;
-        animRef.current.p2.x = 60;
       } else {
         const p = (t - 0.6) / 0.4;
         animRef.current.boss.x = targetX + (originX - targetX) * p;
@@ -472,22 +473,72 @@ export default function App() {
         clearInterval(interval);
         animRef.current.boss.x = originX;
         animRef.current.boss.y = originY;
-        animRef.current.p1.x = 22;
-        animRef.current.p2.x = 64;
         if (callback) callback();
       }
     }, 16);
   };
 
-  // In-World Quick Defenses (Parry button / Slide Evade)
+  // Friday the 13th Dial Animation (Stage 4)
+  useEffect(() => {
+    if (!showFatalCircle) return;
+    circleAngleRef.current = 0;
+
+    const loop = () => {
+      circleAngleRef.current = (circleAngleRef.current + 4.5) % 360;
+      setCircleAngle(circleAngleRef.current);
+      circleAnimRef.current = requestAnimationFrame(loop);
+    };
+
+    circleAnimRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(circleAnimRef.current);
+  }, [showFatalCircle]);
+
+  const triggerFatalCircle = () => {
+    setIsTurnLocked(true);
+    const randomTarget = Math.floor(80 + Math.random() * 200);
+    setCircleTargetAngle(randomTarget);
+    setShowFatalCircle(true);
+    playSound(320, 'sawtooth', 0.2);
+  };
+
+  const handleStopFatalCircle = () => {
+    if (circleAnimRef.current) cancelAnimationFrame(circleAnimRef.current);
+    setShowFatalCircle(false);
+
+    const currentDeg = circleAngleRef.current;
+    const target = circleTargetAngle;
+    const tolerance = 32;
+
+    const diff = Math.abs(currentDeg - target);
+    const isSuccess = diff <= tolerance || (360 - diff) <= tolerance;
+
+    if (isSuccess) {
+      playSound(880, 'triangle', 0.3);
+      setBossFlash(true);
+      setTimeout(() => setBossFlash(false), 200);
+      addFloatingText("AMBUSH DEFLECTED!", 35, 110, '#34d399');
+      setBattleLog("⚡ PURE INSTINCT! Charisse deflected the killer's ambush!");
+      setIsTurnLocked(false);
+    } else {
+      playSound(120, 'sawtooth', 0.5);
+      const hitDamage = 35;
+      const remainingHp = Math.max(0, playerHp - hitDamage);
+      setPlayerHp(remainingHp);
+      addFloatingText(`-${hitDamage} HP!`, 40, 110, '#ef4444');
+      setBattleLog("⚠️ Ambush grazed your defenses! Stay alert!");
+      
+      if (remainingHp <= 0) {
+        setTimeout(() => setGameState('gameover'), 600);
+      } else {
+        setIsTurnLocked(false);
+      }
+    }
+  };
+
+  // In-World Quick Defenses
   const spawnQuickDefense = (type) => {
     setIsTurnLocked(true);
-    const randomPositions = [
-      { x: 'right-3 bottom-28' },
-      { x: 'left-3 bottom-28' },
-      { x: 'right-3 top-36' }
-    ];
-    const pos = randomPositions[Math.floor(Math.random() * randomPositions.length)].x;
+    const pos = 'right-3 bottom-28';
     setQuickDefense({ type, pos, progress: 100 });
     setSlideProgress(0);
     setSlideStartX(null);
@@ -521,12 +572,12 @@ export default function App() {
       triggerSlashVFX('dual', 100, 50);
       setTimeout(() => { setBossFlash(false); setScreenShake(false); }, 250);
       addFloatingText("IN-WORLD PARRY! 🛡️", 30, 120, '#38bdf8');
-      setBattleLog("⚡ REFLEX PARRY! Staggered the boss and absorbed +40 Synergy!");
+      setBattleLog("⚡ REFLEX PARRY! Absorbed incoming strike for +40 Synergy!");
       setSynergy(prev => Math.min(100, prev + 40));
     } else {
       playSound(820, 'sine', 0.15);
       addFloatingText("EVADED! 💨", 30, 120, '#34d399');
-      setBattleLog("💨 SLIDE DODGE! Charisse & Ray slid under the lethal blow!");
+      setBattleLog("💨 SLIDE DODGE! Ducked under the claw sweep!");
     }
     setIsTurnLocked(false);
   };
@@ -546,7 +597,7 @@ export default function App() {
     }
   };
 
-  // Interactive Starlight Capsule Healing
+  // Starlight Capsule Healing System
   const openCapsuleHeal = () => {
     setIsTurnLocked(true);
     setShowCapsuleHeal(true);
@@ -578,18 +629,18 @@ export default function App() {
       const restored = Math.min(100, playerHp + 55);
       setPlayerHp(restored);
       addFloatingText("+55 HP RESTORED!", 30, 130, '#ec4899');
-      setBattleLog("💖 Ray's love restored energy! Team back to full strength!");
+      setBattleLog("💖 Ray's love restored energy! Team healed!");
     } else {
       playSound(160, 'sawtooth', 0.25);
       addFloatingText("MISSED QUIZ!", 30, 130, '#ef4444');
-      setBattleLog("❌ Close! Determined to keep going without healing!");
+      setBattleLog("❌ Determined to keep fighting!");
     }
     setIsTurnLocked(false);
   };
 
   // Turn Execution System
   const initiateAttack = (actionKey) => {
-    if (isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense) return;
+    if (isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle) return;
     setAttackWarning("");
     setPendingAction(actionKey);
     setQteScale(2.3);
@@ -731,7 +782,7 @@ export default function App() {
         setBossFlash(true);
         setTimeout(() => setBossFlash(false), 120);
         addFloatingText("CERIS STARLIGHT LUNGE! 🌙", 20, 120, '#f472b6');
-        setBattleLog("⚔️ Cerce dashes right up to the monster and slashes!");
+        setBattleLog("⚔️ Cerce charges right into the monster's face!");
         setTimeout(() => startDirectionalSwipe('RIGHT'), 200);
       });
     } else if (currentDir === 'RIGHT') {
@@ -740,7 +791,7 @@ export default function App() {
         setBossFlash(true);
         setTimeout(() => setBossFlash(false), 120);
         addFloatingText("RAY CROSS-BLADE CHARGE! ⚡", 20, 120, '#38bdf8');
-        setBattleLog("⚡ Ray lunges forward with a piercing cross-slash!");
+        setBattleLog("⚡ Ray dashes in with a piercing cross-slash!");
         setTimeout(() => startDirectionalSwipe('UP_OR_DOWN'), 200);
       });
     } else if (currentDir === 'UP_OR_DOWN') {
@@ -760,7 +811,7 @@ export default function App() {
     playSound(150, 'sawtooth', 0.25);
     addFloatingText("MISS!", 40, 140, '#94a3b8');
     setAttackWarning(`❌ ${reason}`);
-    setBattleLog("Combo dropped! The monster prepares a heavy strike!");
+    setBattleLog("Combo dropped! The monster counters!");
     setIsTurnLocked(true);
     setTimeout(() => bossCounterAttack(true), 700);
   };
@@ -771,7 +822,7 @@ export default function App() {
 
     if (!isEffective) {
       playSound(200, 'sawtooth', 0.15);
-      addFloatingText("SHIELD DEFLECTED!", 95, 35, '#94a3b8');
+      addFloatingText("SHIELD BLOCKED!", 95, 35, '#94a3b8');
       setAttackWarning(`INEFFECTIVE! Currently weak to: ${currentWeakness.toUpperCase()}`);
       setBattleLog(`Blocked! Monster shielded against that attack!`);
       setTimeout(() => bossCounterAttack(false), 600);
@@ -811,7 +862,7 @@ export default function App() {
   };
 
   const executeHeal = () => {
-    if (isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense) return;
+    if (isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle) return;
     setIsTurnLocked(true);
     setAttackWarning("");
     playSound(580, 'sine', 0.2);
@@ -823,7 +874,7 @@ export default function App() {
   };
 
   const executeUltimate = () => {
-    if (synergy < 100 || isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense) return;
+    if (synergy < 100 || isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle) return;
     setIsTurnLocked(true);
     setAttackWarning("");
     setSynergy(0);
@@ -857,14 +908,20 @@ export default function App() {
     setScreenShake(true);
     setTimeout(() => setScreenShake(false), 300);
 
-    // Dynamic Kinematic Boss Movement
+    // Dynamic Kinematic Boss Lunge
     animateBossLungeAttack(() => {
-      // In-World Quick Defenses Spawn on Screen Directly!
-      if (phase >= 4 && Math.random() < 0.6) {
+      // Stage 4 Friday the 13th Wheel
+      if (phase === 4 && (bossHp <= 150 || Math.random() < 0.65)) {
+        triggerFatalCircle();
+        return;
+      }
+      // Stage 5 In-World Quick Parry
+      if (phase === 5 && Math.random() < 0.65) {
         spawnQuickDefense('parry');
         return;
       }
-      if (phase >= 3 && Math.random() < 0.55) {
+      // Stage 3 In-World Slide Evade
+      if (phase === 3 && Math.random() < 0.55) {
         spawnQuickDefense('slide');
         return;
       }
@@ -948,10 +1005,7 @@ export default function App() {
     setQteStep(null);
     setBossIntro(false);
     setJumpscareActive(false);
-    setShowParryModal(false);
     setShowFatalCircle(false);
-    setShowDodgeModal(false);
-    setShowNeedleMinigame(false);
     setShowCapsuleHeal(false);
     setShowTriviaModal(false);
     setQuickDefense(null);
@@ -997,10 +1051,7 @@ export default function App() {
               </span>
               
               <button
-                onClick={() => {
-                  initAudio();
-                  setIsMuted(!isMuted);
-                }}
+                onClick={() => { initAudio(); setIsMuted(!isMuted); }}
                 className="p-1.5 rounded-full bg-white/10 border border-slate-700 text-pink-300 hover:text-white backdrop-blur-md"
                 title={isMuted ? "Unmute Music" : "Mute Music"}
               >
@@ -1075,14 +1126,15 @@ export default function App() {
 
             <div className="space-y-3 text-xs text-slate-200 my-auto py-3 leading-relaxed">
               <div className="bg-purple-950/60 p-2.5 rounded-xl border border-purple-800/60">
-                <p className="font-bold text-pink-300 text-[11px] mb-0.5">⚔️ DYNAMIC ATTACK CHARGES</p>
-                <p className="text-[11px]">Cerce rushes up with crescent slashes and Ray lunges with dual thunder blades!</p>
+                <p className="font-bold text-pink-300 text-[11px] mb-0.5">⚔️ ATTACK CHARGES & SLASHES</p>
+                <p className="text-[11px]">Cerce rushes forward with starlight crescent slashes and Ray lunges with piercing thunder cross-blades!</p>
               </div>
 
               <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 space-y-1.5 text-[11px]">
-                <p>⚡ <b>In-World Quick Parry:</b> Sudden reflex shield icon pops on the arena—tap it immediately!</p>
+                <p>🎡 <b>Stage 4 Friday 13th Wheel:</b> Stop the rotating dial in the safe slice!</p>
+                <p>⚡ <b>In-World Quick Parry:</b> Tap the sudden reflex shield icon when it pops up!</p>
                 <p>💨 <b>Slide Evade:</b> Slide the glowing evasion bar right to duck under heavy claw sweeps!</p>
-                <p>💊 <b>Starlight Capsule Heal:</b> Pump the charging vial to restore full team health via trivia!</p>
+                <p>💊 <b>Starlight Capsule Heal:</b> Pump the charging vial at low health to trigger the quiz!</p>
                 <p>🧋 <b>Warm Milk Tea:</b> Heals +35 HP on command anytime!</p>
               </div>
             </div>
@@ -1164,7 +1216,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* IN-WORLD SUDDEN DEFENSE TRIGGER: QUICK PARRY BUTTON */}
+              {/* IN-WORLD QUICK PARRY BUTTON */}
               {quickDefense && quickDefense.type === 'parry' && (
                 <div className={`absolute ${quickDefense.pos} z-50 animate-bounce`}>
                   <button
@@ -1181,7 +1233,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* IN-WORLD SUDDEN DEFENSE TRIGGER: SLIDE EVADE SECTION */}
+              {/* IN-WORLD SLIDE EVADE SECTION */}
               {quickDefense && quickDefense.type === 'slide' && (
                 <div className="absolute bottom-20 left-6 right-6 z-50 bg-black/85 border-2 border-emerald-400 p-2.5 rounded-2xl shadow-[0_0_20px_#34d399] flex flex-col items-center animate-fade-in">
                   <div className="flex items-center justify-between w-full font-pixel text-[7.5px] text-emerald-300 mb-1">
@@ -1212,10 +1264,7 @@ export default function App() {
                     onMouseUp={() => setSlideStartX(null)}
                     className="relative w-full h-8 bg-slate-900 border border-slate-700 rounded-full overflow-hidden flex items-center px-1 cursor-grab"
                   >
-                    <div 
-                      className="h-full bg-emerald-500/40 rounded-full transition-all"
-                      style={{ width: `${slideProgress}%` }}
-                    />
+                    <div className="h-full bg-emerald-500/40 rounded-full transition-all" style={{ width: `${slideProgress}%` }} />
                     <div 
                       className="absolute w-7 h-7 rounded-full bg-emerald-400 border border-white flex items-center justify-center text-slate-950 font-bold shadow-md transition-none"
                       style={{ left: `calc(${slideProgress}% * 0.75 + 4px)` }}
@@ -1226,7 +1275,51 @@ export default function App() {
                 </div>
               )}
 
-              {/* STARLIGHT CAPSULE CHARGING HEAL */}
+              {/* FRIDAY THE 13TH NEEDLE WHEEL (STAGE 4) */}
+              {showFatalCircle && (
+                <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+                  <div className="bg-slate-950 border-2 border-red-600 rounded-2xl p-4 flex flex-col items-center max-w-[280px] w-full text-center shadow-[0_0_25px_rgba(239,68,68,0.7)] animate-shake">
+                    <span className="font-pixel text-[8px] text-red-400 bg-red-950 border border-red-700 px-2.5 py-0.5 rounded-full mb-1 flex items-center gap-1">
+                      <Skull size={11} /> FRIDAY 13TH AMBUSH!
+                    </span>
+                    <p className="text-xs text-white font-bold mb-2">
+                      STOP the dial in the white slice!
+                    </p>
+
+                    <div className="relative w-36 h-36 rounded-full border-4 border-slate-700 flex items-center justify-center overflow-hidden bg-slate-900 shadow-inner">
+                      <div 
+                        className="absolute w-full h-full pointer-events-none"
+                        style={{
+                          background: `conic-gradient(from ${circleTargetAngle - 18}deg, transparent 0deg, #ffffff 1deg, #ef4444 18deg, #ffffff 36deg, transparent 37deg)`
+                        }}
+                      />
+
+                      <div 
+                        className="absolute w-full h-1 pointer-events-none"
+                        style={{
+                          transform: `rotate(${circleAngle}deg)`,
+                          transformOrigin: 'center center'
+                        }}
+                      >
+                        <div className="w-1/2 h-full bg-yellow-400 shadow-[0_0_8px_#facc15]" />
+                      </div>
+
+                      <div className="w-8 h-8 rounded-full bg-slate-950 border-2 border-yellow-400 z-10 flex items-center justify-center font-pixel text-[7px] text-yellow-300">
+                        ⚡
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleStopFatalCircle}
+                      className="w-full mt-3 font-pixel text-[10px] bg-red-600 hover:bg-red-500 text-white py-3 rounded-xl shadow-lg shadow-red-600/50 active:scale-95 transition-all tracking-wider"
+                    >
+                      STOP DIAL! 🎯
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STARLIGHT CAPSULE HEALING */}
               {showCapsuleHeal && (
                 <div className="absolute inset-0 z-40 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-fade-in">
                   <div className="bg-slate-950 border-2 border-pink-500 rounded-2xl p-4 flex flex-col items-center max-w-[280px] w-full text-center shadow-[0_0_25px_rgba(244,114,182,0.7)]">
@@ -1408,13 +1501,10 @@ export default function App() {
                   <Zap size={9} /> SYNERGY:
                 </span>
                 <div className="flex-1 bg-slate-800 h-1.5 rounded-full overflow-hidden border border-slate-700">
-                  <div 
-                    className="bg-gradient-to-r from-amber-400 to-yellow-300 h-full transition-all duration-300"
-                    style={{ width: `${synergy}%` }}
-                  />
+                  <div className="bg-gradient-to-r from-amber-400 to-yellow-300 h-full transition-all duration-300" style={{ width: `${synergy}%` }} />
                 </div>
                 <button
-                  disabled={synergy < 100 || isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense}
+                  disabled={synergy < 100 || isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle}
                   onClick={executeUltimate}
                   className={`font-pixel text-[7px] px-2 py-0.5 rounded transition-all ${
                     synergy >= 100 
@@ -1426,10 +1516,10 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 4-Button Grid */}
+              {/* 4-Button Action Grid */}
               <div className="grid grid-cols-2 gap-1.5">
                 <button
-                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense}
+                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle}
                   onClick={() => initiateAttack('comm')}
                   className={`py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md text-left ${
                     currentWeakness === 'comm' ? 'bg-pink-600 ring-2 ring-yellow-300 animate-pulse' : 'bg-pink-800/80 hover:bg-pink-700'
@@ -1443,7 +1533,7 @@ export default function App() {
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense}
+                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle}
                   onClick={() => initiateAttack('food')}
                   className={`py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md text-left ${
                     currentWeakness === 'food' ? 'bg-emerald-600 ring-2 ring-yellow-300 animate-pulse' : 'bg-emerald-800/80 hover:bg-emerald-700'
@@ -1457,7 +1547,7 @@ export default function App() {
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense}
+                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle}
                   onClick={() => initiateAttack('hug')}
                   className={`py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md text-left ${
                     currentWeakness === 'hug' ? 'bg-purple-600 ring-2 ring-yellow-300 animate-pulse' : 'bg-purple-800/80 hover:bg-purple-700'
@@ -1471,7 +1561,7 @@ export default function App() {
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense}
+                  disabled={isTurnLocked || qteStep || showTriviaModal || showCapsuleHeal || quickDefense || showFatalCircle}
                   onClick={executeHeal}
                   className="bg-sky-600 hover:bg-sky-500 disabled:opacity-40 py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md shadow-sky-600/30 text-left"
                 >
@@ -1556,19 +1646,19 @@ export default function App() {
 
         {/* ================= SCREEN 5: GAME OVER (DEAD-CENTERED FIX) ================= */}
         {gameState === 'gameover' && (
-          <div className="w-full h-full flex flex-col items-center justify-center my-auto p-4 text-center bg-black/95 animate-fade-in gap-3.5">
-            <Skull size={44} className="text-red-500 animate-bounce" />
+          <div className="w-full h-full flex flex-col justify-center items-center p-6 text-center bg-black/95 animate-fade-in gap-4">
+            <Skull size={48} className="text-red-500 animate-bounce" />
             <div>
-              <h2 className="font-pixel text-base text-red-500 tracking-wider">OVERWHELMED BY DARKNESS</h2>
-              <p className="text-[11px] text-slate-400 mt-1.5 max-w-[250px] leading-relaxed">
-                The storm broke your defense! Watch for the sudden in-world Parry icons and slide evades!
+              <h2 className="font-pixel text-base sm:text-lg text-red-500 tracking-wider">OVERWHELMED BY DARKNESS</h2>
+              <p className="text-xs text-slate-400 mt-2 max-w-[260px] leading-relaxed mx-auto">
+                The storm broke your defense! Watch for the sudden in-world Parry buttons and slide evades!
               </p>
             </div>
 
-            <div className="w-full max-w-[260px] flex flex-col gap-2 mt-2">
+            <div className="w-full max-w-[270px] flex flex-col gap-2.5 mt-2">
               <button
                 onClick={() => resetCampaign(false)}
-                className="w-full font-pixel text-[10px] bg-red-600 hover:bg-red-500 py-3 px-4 rounded-xl shadow-lg shadow-red-600/40 active:scale-95 transition-all flex items-center justify-center gap-2"
+                className="w-full font-pixel text-[10px] bg-red-600 hover:bg-red-500 py-3.5 px-4 rounded-xl shadow-lg shadow-red-600/40 active:scale-95 transition-all flex items-center justify-center gap-2"
               >
                 <RefreshCw size={13} /> TRY AGAIN RIGHT AWAY
               </button>
