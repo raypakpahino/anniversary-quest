@@ -4,15 +4,14 @@ import {
   Trophy, Sparkles, HelpCircle, X, ArrowRight, 
   ShieldCheck, Zap, RefreshCw, Award, AlertTriangle, 
   Skull, HeartPulse, Volume2, VolumeX, Heart, ArrowLeft, ArrowUp, ArrowDown,
-  Sun, Shield, Wind, Sparkle, Flame, Compass
+  Sun, Shield, Wind, Sparkle, Flame, BookOpen
 } from 'lucide-react';
 
 export default function App() {
-  const [gameState, setGameState] = useState('landing'); // 'landing' | 'battle' | 'cutscene' | 'victory' | 'gameover'
-  const [showInstructions, setShowInstructions] = useState(false);
+  const [gameState, setGameState] = useState('landing'); // 'landing' | 'instructions' | 'battle' | 'cutscene' | 'victory' | 'gameover'
   const [isMuted, setIsMuted] = useState(false);
   
-  // Combat System (5 Progressive Stages)
+  // Combat System (5 Stages)
   const [phase, setPhase] = useState(1);
   const [bossHp, setBossHp] = useState(100);
   const [playerHp, setPlayerHp] = useState(100);
@@ -49,13 +48,13 @@ export default function App() {
   const [showParryModal, setShowParryModal] = useState(false);
   const [parryRingScale, setParryRingScale] = useState(2.3);
 
-  // Agile Dodge Mechanic (Stages 3 & 4)
+  // Agile Dodge Mechanic (Stage 3)
   const [showDodgeModal, setShowDodgeModal] = useState(false);
   const [dodgeTimer, setDodgeTimer] = useState(100);
 
   const [pendingAction, setPendingAction] = useState(null);
 
-  // Emergency Critical Recovery Needle & Trivia
+  // Emergency Recovery Needle & Trivia (Triggers comfortably at <= 55% HP)
   const [showNeedleMinigame, setShowNeedleMinigame] = useState(false);
   const [needlePos, setNeedlePos] = useState(50);
   const [showTriviaModal, setShowTriviaModal] = useState(false);
@@ -146,7 +145,7 @@ export default function App() {
     setIsSurpriseWeakness(false);
   }, [phase]);
 
-  // Rain Drops and Falling Blossom Petals Initialization
+  // Rain and Blossom Petal Initializers
   useEffect(() => {
     const drops = [];
     for (let i = 0; i < 70; i++) {
@@ -197,7 +196,7 @@ export default function App() {
       osc.start();
       osc.stop(ctx.currentTime + dur);
     } catch {
-      // Audio safety fallback
+      // Audio safety
     }
   };
 
@@ -259,7 +258,7 @@ export default function App() {
 
   // Background Music Loop
   useEffect(() => {
-    if (isMuted || gameState === 'landing' || gameState === 'gameover') {
+    if (isMuted || gameState === 'landing' || gameState === 'instructions' || gameState === 'gameover') {
       if (bgmIntervalRef.current) clearInterval(bgmIntervalRef.current);
       return;
     }
@@ -367,7 +366,7 @@ export default function App() {
 
     const currentDeg = circleAngleRef.current;
     const target = circleTargetAngle;
-    const tolerance = 35; // Generous 70-degree target arc
+    const tolerance = 35; // 70-degree sweet spot
 
     const diff = Math.abs(currentDeg - target);
     const isSuccess = diff <= tolerance || (360 - diff) <= tolerance;
@@ -403,7 +402,7 @@ export default function App() {
     playSound(380, 'sine', 0.15);
 
     const start = Date.now();
-    const duration = 1400; // 1.4s comfortable reaction window
+    const duration = 1400;
 
     if (parryTimerRef.current) clearInterval(parryTimerRef.current);
 
@@ -462,14 +461,14 @@ export default function App() {
     }
   };
 
-  // Quick-Dodge Evade System (Stages 3 & 4)
+  // Quick-Dodge Evade System (Stage 3)
   const triggerDodgeAction = () => {
     setIsTurnLocked(true);
     setShowDodgeModal(true);
     setDodgeTimer(100);
 
     const start = Date.now();
-    const duration = 1800; // 1.8s window
+    const duration = 1800;
 
     if (dodgeTimerRef.current) clearInterval(dodgeTimerRef.current);
 
@@ -649,13 +648,11 @@ export default function App() {
 
       const mood = phase >= 5 ? 'apocalypse' : (phase >= 3 ? 'dark' : 'cute');
 
-      // Beautiful Detailed Trees
       drawPineTree(ctx, 4, 42, 0.9, mood);
       drawPineTree(ctx, 22, 38, 1.1, mood);
       drawPineTree(ctx, 60, 36, 1.0, mood);
       drawPineTree(ctx, 134, 40, 0.95, mood);
 
-      // Arena Ground
       ctx.fillStyle = phase >= 4 ? '#180205' : (phase === 3 ? '#0a0512' : '#14532d');
       ctx.beginPath();
       ctx.moveTo(0, 95);
@@ -664,7 +661,6 @@ export default function App() {
       ctx.lineTo(0, 240);
       ctx.fill();
 
-      // Pathway
       ctx.fillStyle = phase >= 4 ? '#100104' : (phase === 3 ? '#1e1b2e' : '#334155');
       ctx.beginPath();
       ctx.moveTo(20, 120);
@@ -673,7 +669,6 @@ export default function App() {
       ctx.lineTo(10, 215);
       ctx.fill();
 
-      // Rocks and Flower Tufts
       drawMossyRock(ctx, 6, 98, 18, 11, mood);
       drawMossyRock(ctx, 136, 175, 16, 9, mood);
       if (phase <= 2) {
@@ -683,7 +678,6 @@ export default function App() {
         drawFlowerTuft(ctx, 22, 220, '#60a5fa');
       }
 
-      // Boss Display
       const bob = Math.sin(tick * 0.1) * (phase >= 4 ? 4 : 2);
       const bX = 96 + animRef.current.bossOffset.x;
       const bY = 34 + animRef.current.bossOffset.y + bob;
@@ -726,7 +720,6 @@ export default function App() {
           ctx.fillRect(bX + 11, bY + 10, 3, 3);
           ctx.fillRect(bX + 27, bY + 10, 3, 3);
         } else {
-          // Boss 5: Void Titan
           ctx.fillStyle = '#1e0024';
           ctx.fillRect(bX - 8, bY - 12, 56, 56);
           ctx.fillStyle = '#4a0058';
@@ -751,7 +744,7 @@ export default function App() {
       const p1Y = 138 + animRef.current.p1Offset.y;
       drawCuteCharisse(ctx, p1X, p1Y);
 
-      // Rain / Blood Rain Weather (Stages 3-5)
+      // Rain / Blood Weather
       if (phase >= 3) {
         ctx.strokeStyle = phase >= 4 ? 'rgba(239, 68, 68, 0.7)' : 'rgba(186, 230, 253, 0.45)';
         ctx.lineWidth = phase >= 4 ? 1.5 : 1;
@@ -769,7 +762,6 @@ export default function App() {
           }
         });
 
-        // Stage 5 Violent Lightning Flashes
         if (phase === 5 && Math.random() < 0.04) {
           ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
           ctx.fillRect(0, 0, 160, 240);
@@ -810,7 +802,6 @@ export default function App() {
       tick++;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Warm Golden Romantic Sunset Gradient
       const skyGrad = ctx.createLinearGradient(0, 0, 0, 140);
       skyGrad.addColorStop(0, '#f97316');
       skyGrad.addColorStop(0.5, '#fb923c');
@@ -818,13 +809,11 @@ export default function App() {
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, 160, 240);
 
-      // Big Glowing Sunset
       ctx.fillStyle = 'rgba(254, 240, 138, 0.9)';
       ctx.beginPath();
       ctx.arc(80, 85, 26 + Math.sin(tick * 0.05) * 2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Soft Sunset Horizon Hills
       ctx.fillStyle = '#15803d';
       ctx.beginPath();
       ctx.moveTo(0, 125);
@@ -841,7 +830,6 @@ export default function App() {
       ctx.lineTo(0, 240);
       ctx.fill();
 
-      // Flower meadow blossoms
       for (let f = 8; f < 155; f += 16) {
         ctx.fillStyle = f % 2 === 0 ? '#f43f5e' : '#ec4899';
         ctx.fillRect(f, 195 + (f % 5), 3, 3);
@@ -849,7 +837,6 @@ export default function App() {
         ctx.fillRect(f + 1, 196 + (f % 5), 1, 1);
       }
 
-      // Falling Cherry Blossom Petals
       ctx.fillStyle = 'rgba(244, 114, 182, 0.8)';
       animRef.current.petals.forEach((p) => {
         ctx.beginPath();
@@ -863,7 +850,6 @@ export default function App() {
         }
       });
 
-      // Character Sunset Walk
       const walkOffset = animRef.current.cutsceneWalkOffset;
       if (cutsceneCharsFaded) {
         animRef.current.cutsceneWalkOffset += 0.4;
@@ -881,7 +867,6 @@ export default function App() {
       drawCuteCharisse(ctx, p1X, 145 + walkBob);
       drawCuteRay(ctx, p2X, 145 + walkBob);
 
-      // Floating Heart
       ctx.fillStyle = '#f43f5e';
       ctx.font = '12px "Press Start 2P"';
       ctx.fillText("❤️", 72 + walkOffset, 138 + Math.sin(tick * 0.1) * 2);
@@ -1083,7 +1068,7 @@ export default function App() {
       setScreenShake(false);
     }, 350);
 
-    const baseDmg = isCrit ? (phase === 5 ? 45 : 55) : 32;
+    const baseDmg = isCrit ? (phase === 5 ? 40 : 50) : 30;
     playSound(isCrit ? 700 : 500, 'triangle', 0.15);
     addFloatingText(isCrit ? `CRIT! -${baseDmg}` : `-${baseDmg}`, 95, 30, isCrit ? '#f43f5e' : '#facc15');
 
@@ -1095,7 +1080,6 @@ export default function App() {
     if (nextBossHp <= 0) {
       setTimeout(() => advancePhase(), 800);
     } else {
-      // 25% chance for a temporary craving
       if (Math.random() < 0.25) {
         const cravings = ['comm', 'food', 'hug'];
         const surprise = cravings.filter(c => c !== currentBoss.baseWeakness)[Math.floor(Math.random() * 2)];
@@ -1158,21 +1142,21 @@ export default function App() {
     setScreenShake(true);
     setTimeout(() => setScreenShake(false), 300);
 
-    // Defense Mechanic Triggers
-    if (phase === 5 && Math.random() < 0.5) {
+    // Guaranteed trigger paths for specific mechanics
+    if (phase === 5 && Math.random() < 0.65) {
       setTimeout(() => triggerMatrixParry(), 400);
       return;
     }
-    if (phase === 4 && Math.random() < 0.5) {
+    if (phase === 4 && (bossHp <= 70 || Math.random() < 0.65)) {
       setTimeout(() => triggerFatalCircle(), 400);
       return;
     }
-    if (phase === 3 && Math.random() < 0.45) {
+    if (phase === 3 && Math.random() < 0.55) {
       setTimeout(() => triggerDodgeAction(), 400);
       return;
     }
 
-    const damage = (isHeavyHit ? 24 : 16) + (phase * 3);
+    const damage = (isHeavyHit ? 28 : 18) + (phase * 3);
     const remainingHp = Math.max(0, playerHp - damage);
     setPlayerHp(remainingHp);
     addFloatingText(`-${damage} HP`, 35, 140, '#ef4444');
@@ -1181,7 +1165,8 @@ export default function App() {
       playSound(100, 'sawtooth', 0.5);
       setBattleLog("💀 Team HP hit 0! You were defeated...");
       setTimeout(() => setGameState('gameover'), 700);
-    } else if (remainingHp <= 35) {
+    } else if (remainingHp <= 55) {
+      // Guaranteed healing check window at <= 55% HP
       setIsTurnLocked(true);
       setTimeout(() => {
         playSound(440, 'sine', 0.2);
@@ -1273,7 +1258,6 @@ export default function App() {
         setIsTurnLocked(false);
       }
     } else {
-      // VICTORY: TRIGGER ROMANTIC SUNSET CUTSCENE
       setIsTurnLocked(true);
       playRomanticChiptune();
       confetti({ particleCount: 160, spread: 90, origin: { y: 0.6 } });
@@ -1303,14 +1287,13 @@ export default function App() {
 
     if (toMainMenu) {
       setGameState('landing');
-      setShowInstructions(true);
     } else {
       setGameState('battle');
       setBattleLog("Stage 1: The Stubborn Ego Monster appears!");
     }
   };
 
-  // Preserved Love Letters
+  // Preserved Personal Love Letters
   const polaroids = [
     {
       caption: "Thank You for Healing My Knee 🩹",
@@ -1333,66 +1316,54 @@ export default function App() {
     <div className="w-full h-[100dvh] flex items-center justify-center font-cozy text-white select-none bg-black overflow-hidden p-0">
       <div className={`w-full max-w-[430px] h-full flex flex-col justify-between relative bg-slate-950 border-x border-slate-800 shadow-2xl overflow-hidden ${screenShake ? 'animate-shake' : ''}`}>
 
-        {/* ================= SCREEN 1: LANDING ================= */}
+        {/* ================= SCREEN 1: NEW TITLED LANDING PAGE ================= */}
         {gameState === 'landing' && (
-          <div className="w-full h-full flex flex-col justify-between p-3.5 sm:p-5 text-center overflow-hidden">
+          <div className="w-full h-full flex flex-col justify-between p-4 sm:p-5 text-center overflow-hidden">
             <div className="w-full flex justify-between items-center shrink-0 pt-0.5">
               <span className="font-pixel text-[8px] text-pink-400 bg-pink-950/80 border border-pink-700/60 px-2.5 py-1 rounded-full">
                 MAY 9, 2026 ➔ TODAY ❤️
               </span>
               
-              <div className="flex items-center gap-1.5">
-                <button 
-                  onClick={() => { initAudio(); playSound(500, 'sine', 0.05); setShowInstructions(true); }}
-                  className="flex items-center gap-1 text-[11px] text-pink-300 hover:text-white bg-white/10 px-2.5 py-1 rounded-full backdrop-blur-md"
-                >
-                  <HelpCircle size={12} /> Rules
-                </button>
-                <button
-                  onClick={() => {
-                    initAudio();
-                    setIsMuted(!isMuted);
-                  }}
-                  className="p-1 rounded-full bg-white/10 border border-slate-700 text-pink-300 hover:text-white backdrop-blur-md"
-                  title={isMuted ? "Unmute Music" : "Mute Music"}
-                >
-                  {isMuted ? <VolumeX size={13} /> : <Volume2 size={13} className="text-yellow-300" />}
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  initAudio();
+                  setIsMuted(!isMuted);
+                }}
+                className="p-1.5 rounded-full bg-white/10 border border-slate-700 text-pink-300 hover:text-white backdrop-blur-md"
+                title={isMuted ? "Unmute Music" : "Mute Music"}
+              >
+                {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} className="text-yellow-300" />}
+              </button>
             </div>
 
-            <div className="flex flex-col items-center my-auto gap-1.5 shrink-0 py-1">
-              <div className="relative my-0.5">
-                <div className="text-4xl sm:text-5xl animate-bounce">💖👾⚔️</div>
-                <Sparkles className="absolute -top-1.5 -right-2 text-yellow-300 animate-spin" size={18} />
+            <div className="flex flex-col items-center my-auto gap-2.5 shrink-0 py-2">
+              <div className="relative my-1">
+                <div className="text-5xl sm:text-6xl animate-bounce">⚔️💖👑</div>
+                <Sparkles className="absolute -top-2 -right-2 text-yellow-300 animate-spin" size={22} />
               </div>
 
               <div>
-                <h1 className="font-pixel text-xs sm:text-sm text-pink-200 tracking-wider leading-snug">
-                  4-MONTH ANNIVERSARY QUEST<br />
-                  <span className="text-amber-300 font-bold tracking-widest text-[8.5px]">5 BOSSES • PROGRESSIVE SURVIVAL</span>
+                <h1 className="font-pixel text-sm sm:text-base text-pink-200 tracking-wider leading-snug">
+                  CHARISSE'S GAME ADVENTURE<br />
+                  <span className="text-amber-300 text-xs tracking-widest">4-MONTH ANNIVERSARY QUEST</span>
                 </h1>
-                <p className="text-[10px] text-pink-300/80 mt-0.5">
-                  Dating Since May 9, 2026 • 123 Days of Love
+                <p className="text-[11px] text-pink-300/80 mt-1">
+                  123 Days of Love • 5 Epic Boss Battles
                 </p>
               </div>
 
-              <div className="bg-purple-950/80 border border-purple-800 rounded-xl p-2.5 w-full max-w-[340px] text-left shadow-2xl backdrop-blur-md space-y-1 mt-0.5">
-                <div className="font-pixel text-[7.5px] text-yellow-300 border-b border-purple-800/80 pb-0.5 flex items-center justify-between tracking-wider">
-                  <span>DEFENSE ARSENAL</span>
-                  <span className="text-pink-300">5 STAGES</span>
-                </div>
-
-                <div className="text-[10px] text-pink-200 space-y-1">
-                  <p>🎡 <b>Stage 4:</b> Friday the 13th wheel skill check!</p>
-                  <p>⚡ <b>Stage 5:</b> Slow-Mo Matrix shield deflection!</p>
-                  <p>💨 <b>Stage 3:</b> Agile quick-dodge claw sweeps!</p>
-                  <p>🩹 <b>Emergency Heal:</b> Green needle check at &lt;35% HP!</p>
-                </div>
+              <div className="bg-purple-950/70 border border-purple-800 rounded-xl p-3 w-full max-w-[320px] text-center shadow-2xl backdrop-blur-md space-y-1 mt-1">
+                <span className="font-pixel text-[8px] text-yellow-300 tracking-wider block">
+                  ❤️ DEDICATED TO MY FAVORITE GAMER ❤️
+                </span>
+                <p className="text-[11px] text-pink-100 italic">
+                  "Ready to conquer the trials and save our sunset meadow together?"
+                </p>
               </div>
             </div>
 
-            <div className="w-full shrink-0 pt-2 pb-1">
+            {/* 2 Big Buttons: Start Quest & Rules Page */}
+            <div className="w-full shrink-0 flex flex-col gap-2 pt-2 pb-1">
               <button
                 onClick={() => {
                   initAudio();
@@ -1401,46 +1372,64 @@ export default function App() {
                 }}
                 className="w-full font-pixel text-xs bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 py-3.5 rounded-xl shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 tracking-wider transform active:scale-95 transition-all"
               >
-                START BATTLE <ArrowRight size={14} />
+                START ADVENTURE <ArrowRight size={14} />
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* ================= INSTRUCTIONS MODAL ================= */}
-        {showInstructions && (
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border-2 border-purple-500/80 rounded-2xl p-4 max-w-[320px] w-full text-left relative shadow-2xl">
-              <button 
-                onClick={() => setShowInstructions(false)}
-                className="absolute top-3.5 right-3.5 text-slate-400 hover:text-white"
-              >
-                <X size={16} />
-              </button>
-              
-              <div className="flex items-center gap-2 font-pixel text-xs text-purple-300 mb-2.5">
-                <ShieldCheck size={16} />
-                <span>COMBAT MECHANICS</span>
-              </div>
-              
-              <div className="text-[11px] text-slate-300 space-y-2 leading-relaxed">
-                <p>🔄 <b>Dynamic Craving:</b> Monsters have primary weaknesses (~80%), but sometimes show a glowing mood craving!</p>
-                <p>🎡 <b>Friday 13th Wheel (Stage 4):</b> Stop the rotating dial in the white slice to evade damage!</p>
-                <p>⚡ <b>Slow-Mo Shield (Stage 5):</b> Press Parry when the contracting ring hits the center shield!</p>
-                <p>🧋 <b>Warm Milk Tea:</b> Heals +35 HP whenever you need energy!</p>
-              </div>
 
               <button
-                onClick={() => setShowInstructions(false)}
-                className="w-full mt-3.5 font-pixel text-[9px] bg-purple-600 hover:bg-purple-700 py-2 rounded-lg text-center"
+                onClick={() => {
+                  initAudio();
+                  playSound(500, 'sine', 0.05);
+                  setGameState('instructions');
+                }}
+                className="w-full font-pixel text-[9.5px] bg-slate-900 hover:bg-slate-800 text-pink-300 border border-slate-700 py-2.5 rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all"
               >
-                GOT IT!
+                <BookOpen size={13} /> HOW TO PLAY & COMBAT RULES
               </button>
             </div>
           </div>
         )}
 
-        {/* ================= SCREEN 2: BATTLE ARENA ================= */}
+        {/* ================= SCREEN 2: DEDICATED RULES PAGE ================= */}
+        {gameState === 'instructions' && (
+          <div className="w-full h-full flex flex-col justify-between p-4 sm:p-5 text-left bg-slate-950 overflow-y-auto animate-fade-in">
+            <div className="flex items-center justify-between border-b border-purple-800/80 pb-2">
+              <div className="flex items-center gap-2 font-pixel text-xs text-pink-300">
+                <ShieldCheck size={16} className="text-pink-400" />
+                <span>ADVENTURE GUIDE</span>
+              </div>
+              <button
+                onClick={() => setGameState('landing')}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-200 my-auto py-3 leading-relaxed">
+              <div className="bg-purple-950/60 p-2.5 rounded-xl border border-purple-800/60">
+                <p className="font-bold text-pink-300 text-[11px] mb-0.5">⚔️ PRIMARY COUNTERS & CRAVINGS</p>
+                <p className="text-[11px]">Monsters are mostly weak to their signature weakness, but watch for surprise glowing mood cravings!</p>
+              </div>
+
+              <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 space-y-1.5 text-[11px]">
+                <p>🎡 <b>Stage 4 Ambush:</b> Stop the rotating Friday 13th dial in the safe slice!</p>
+                <p>⚡ <b>Stage 5 Shield Parry:</b> Tap when the shrinking ring touches the shield!</p>
+                <p>💨 <b>Stage 3 Dodge:</b> Quick-jump over claw sweep attacks!</p>
+                <p>🩹 <b>Emergency Heal:</b> At &le;55% HP, stop the needle in the green zone to unlock a +50 HP quiz!</p>
+                <p>🧋 <b>Warm Milk Tea:</b> Heals +35 HP on command anytime!</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setGameState('landing')}
+              className="w-full font-pixel text-[10px] bg-pink-600 hover:bg-pink-500 py-3.5 rounded-xl text-center shadow-lg active:scale-95 transition-all shrink-0"
+            >
+              BACK TO TITLE SCREEN ➔
+            </button>
+          </div>
+        )}
+
+        {/* ================= SCREEN 3: BATTLE ARENA ================= */}
         {gameState === 'battle' && (
           <div className="w-full h-full flex flex-col justify-between relative overflow-hidden">
             
@@ -1498,14 +1487,14 @@ export default function App() {
               <div className="absolute bottom-2 left-2 bg-black/85 border border-slate-700 p-1.5 rounded-lg w-38 shadow-lg">
                 <div className="flex justify-between font-pixel text-[7.5px] text-emerald-400 mb-0.5">
                   <span className="flex items-center gap-1">
-                    <HeartPulse size={9} className={playerHp <= 35 ? 'text-red-400 animate-spin' : ''} />
+                    <HeartPulse size={9} className={playerHp <= 55 ? 'text-red-400 animate-spin' : ''} />
                     OUR TEAM HP
                   </span>
-                  <span className={playerHp <= 35 ? 'text-red-400 animate-pulse font-bold' : ''}>{playerHp}%</span>
+                  <span className={playerHp <= 55 ? 'text-red-400 animate-pulse font-bold' : ''}>{playerHp}%</span>
                 </div>
                 <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                   <div 
-                    className={`h-full transition-all duration-300 ${playerHp <= 35 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                    className={`h-full transition-all duration-300 ${playerHp <= 55 ? 'bg-red-500' : 'bg-emerald-500'}`}
                     style={{ width: `${playerHp}%` }}
                   />
                 </div>
@@ -1916,7 +1905,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= SCREEN 3: ROMANTIC SUNSET CUTSCENE ================= */}
+        {/* ================= SCREEN 4: ROMANTIC SUNSET CUTSCENE ================= */}
         {gameState === 'cutscene' && (
           <div className="w-full h-full flex flex-col justify-between relative overflow-hidden bg-gradient-to-b from-orange-500 to-amber-300 animate-fade-in">
             <div className="relative flex-1 w-full overflow-hidden">
@@ -1935,7 +1924,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Romantic Dialogue Box */}
             <div className="bg-gradient-to-t from-slate-950 via-slate-900/95 to-transparent p-4 text-center shrink-0 border-t border-amber-400/40">
               {cutsceneDialogueIndex === 1 && (
                 <div className="space-y-2 animate-fade-in">
@@ -1985,7 +1973,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= SCREEN 4: GAME OVER (DEAD-CENTERED FIX) ================= */}
+        {/* ================= SCREEN 5: GAME OVER (DEAD-CENTERED FIX) ================= */}
         {gameState === 'gameover' && (
           <div className="w-full h-full flex flex-col items-center justify-center my-auto p-4 text-center bg-black/95 animate-fade-in gap-3.5">
             <Skull size={44} className="text-red-500 animate-bounce" />
@@ -2008,13 +1996,13 @@ export default function App() {
                 onClick={() => resetCampaign(true)}
                 className="w-full font-pixel text-[8.5px] bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 px-4 rounded-xl border border-slate-700 active:scale-95 transition-all flex items-center justify-center gap-2"
               >
-                <HelpCircle size={13} /> MAIN MENU & RULES
+                <HelpCircle size={13} /> MAIN MENU
               </button>
             </div>
           </div>
         )}
 
-        {/* ================= SCREEN 5: FINAL VICTORY & PRESERVED LETTERS ================= */}
+        {/* ================= SCREEN 6: FINAL VICTORY & PRESERVED LETTERS ================= */}
         {gameState === 'victory' && (
           <div className="w-full h-full flex flex-col items-center justify-between p-3.5 text-center overflow-y-auto">
             <div className="w-full flex flex-col items-center pt-0.5">
