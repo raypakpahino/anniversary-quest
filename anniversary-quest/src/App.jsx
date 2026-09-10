@@ -4,28 +4,30 @@ import {
   Trophy, Sparkles, HelpCircle, X, ArrowRight, 
   ShieldCheck, Zap, RefreshCw, Award, AlertTriangle, 
   Skull, HeartPulse, Volume2, VolumeX, Heart, ArrowLeft, ArrowUp, ArrowDown,
-  Flame, EyeOff
+  Flame, Sun, CheckCircle2
 } from 'lucide-react';
 
 export default function App() {
-  const [gameState, setGameState] = useState('landing');
+  const [gameState, setGameState] = useState('landing'); // 'landing' | 'battle' | 'clearing_cutscene' | 'victory' | 'gameover'
   const [showInstructions, setShowInstructions] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   
-  // Combat System
+  // Combat System (Now 5 Epic Stages)
   const [phase, setPhase] = useState(1);
   const [bossHp, setBossHp] = useState(100);
   const [playerHp, setPlayerHp] = useState(100);
   const [synergy, setSynergy] = useState(0);
+  const [dynamicWeakness, setDynamicWeakness] = useState('comm');
   const [battleLog, setBattleLog] = useState("Stage 1: The Stubborn Ego Monster appears!");
   const [isTurnLocked, setIsTurnLocked] = useState(false);
   const [attackWarning, setAttackWarning] = useState("");
 
-  // Jumpscare & Intros
-  const [finalBossIntro, setFinalBossIntro] = useState(false);
+  // Intros & Cutscenes
+  const [bossIntro, setBossIntro] = useState(false);
   const [jumpscareActive, setJumpscareActive] = useState(false);
+  const [cutsceneStep, setCutsceneStep] = useState(0);
 
-  // QTE Attack States (Tighter timings for Hard Mode)
+  // QTE States
   const [qteStep, setQteStep] = useState(null); // 'timed' | 'mash' | 'swipe' | null
   const [qteScale, setQteScale] = useState(2.3);
   const [mashCount, setMashCount] = useState(0);
@@ -36,14 +38,18 @@ export default function App() {
   const [swipeTimer, setSwipeTimer] = useState(100);
   const [touchStartPos, setTouchStartPos] = useState(null);
 
-  // Friday the 13th Fatal Skill Check Circle
+  // Balanced Friday the 13th Fatal Wheel (Stage 4)
   const [showFatalCircle, setShowFatalCircle] = useState(false);
   const [circleAngle, setCircleAngle] = useState(0);
   const [circleTargetAngle, setCircleTargetAngle] = useState(180);
 
+  // Stage 5 Dual-Zone Parrying Mechanic
+  const [showDualParry, setShowDualParry] = useState(false);
+  const [parryPos, setParryPos] = useState(50);
+
   const [pendingAction, setPendingAction] = useState(null);
 
-  // Standard Critical Health Mini-Game & Trivia States
+  // Recovery Needle & Trivia States
   const [showNeedleMinigame, setShowNeedleMinigame] = useState(false);
   const [needlePos, setNeedlePos] = useState(50);
   const [showTriviaModal, setShowTriviaModal] = useState(false);
@@ -54,16 +60,18 @@ export default function App() {
   const [bossFlash, setBossFlash] = useState(false);
   const [activePolaroid, setActivePolaroid] = useState(0);
 
-  // Animation Positions & Blood Rain Weather
+  // Animation Positions, Lightning & Weather
   const animRef = useRef({
     p1Offset: { x: 0, y: 0 },
     p2Offset: { x: 0, y: 0 },
     bossOffset: { x: 0, y: 0 },
     floatingTexts: [],
-    rainDrops: []
+    rainDrops: [],
+    petals: []
   });
 
   const canvasRef = useRef(null);
+  const cutsceneCanvasRef = useRef(null);
   const audioCtxRef = useRef(null);
   const bgmIntervalRef = useRef(null);
   const qteTimerRef = useRef(null);
@@ -71,31 +79,33 @@ export default function App() {
   const needleAnimRef = useRef(null);
   const circleAnimRef = useRef(null);
   const circleAngleRef = useRef(0);
+  const parryAnimRef = useRef(null);
 
   const bosses = [
     {
       name: "EGO MONSTER",
       title: "STAGE 1: THE EGO MONSTER",
-      weakness: "comm",
-      hint: "Communicate openly with pure love!"
+      desc: "Shifts between Pride & Stubbornness"
     },
     {
       name: "HANGRY GOBLIN",
       title: "STAGE 2: THE HANGRY GOBLIN",
-      weakness: "food",
-      hint: "Feed it a delicious burger & milk tea!"
+      desc: "Craves delicious food or warm hugs"
     },
     {
       name: "OVERTHINK PHANTOM",
       title: "STAGE 3: OVERTHINK PHANTOM",
-      weakness: "hug",
-      hint: "Shower it with reassurance and warm hugs!"
+      desc: "Spiral of doubt calmed by reassurance"
     },
     {
-      name: "DREAD DEVOURER 💀",
-      title: "FINAL STAGE: DREAD DEVOURER",
-      weakness: "comm",
-      hint: "Overcome fear with unbreakable trust!"
+      name: "DREAD DEVOURER",
+      title: "STAGE 4: DREAD DEVOURER",
+      desc: "Fear beast that tests your instincts"
+    },
+    {
+      name: "ABYSS VOID TITAN ⚡",
+      title: "FINAL STAGE: THE APOCALYPSE TITAN",
+      desc: "Ultimate darkness threatening the bond"
     }
   ];
 
@@ -119,9 +129,19 @@ export default function App() {
 
   const currentBoss = bosses[phase - 1] || bosses[0];
 
+  // Set initial dynamic weakness per phase
+  useEffect(() => {
+    if (phase === 1) setDynamicWeakness('comm');
+    if (phase === 2) setDynamicWeakness('food');
+    if (phase === 3) setDynamicWeakness('hug');
+    if (phase === 4) setDynamicWeakness('comm');
+    if (phase === 5) setDynamicWeakness('hug');
+  }, [phase]);
+
+  // Rain and Petals initialization
   useEffect(() => {
     const drops = [];
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 70; i++) {
       drops.push({
         x: Math.random() * 160,
         y: Math.random() * 240,
@@ -129,7 +149,18 @@ export default function App() {
         length: 8 + Math.random() * 6
       });
     }
+    const petals = [];
+    for (let i = 0; i < 40; i++) {
+      petals.push({
+        x: Math.random() * 160,
+        y: Math.random() * 240,
+        speedX: 0.5 - Math.random() * 1,
+        speedY: 1 + Math.random() * 1.5,
+        size: 2 + Math.random() * 2
+      });
+    }
     animRef.current.rainDrops = drops;
+    animRef.current.petals = petals;
   }, []);
 
   const initAudio = () => {
@@ -161,6 +192,27 @@ export default function App() {
     }
   };
 
+  const playThunderSound = () => {
+    if (isMuted) return;
+    try {
+      initAudio();
+      const ctx = audioCtxRef.current;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(90, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 0.9);
+      gain.gain.setValueAtTime(0.35, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.95);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.95);
+    } catch {
+      // Audio safety
+    }
+  };
+
   const playJumpscareSound = () => {
     if (isMuted) return;
     try {
@@ -169,27 +221,22 @@ export default function App() {
       const osc1 = ctx.createOscillator();
       const osc2 = ctx.createOscillator();
       const gain = ctx.createGain();
-      
       osc1.type = 'sawtooth';
       osc2.type = 'square';
-      osc1.frequency.setValueAtTime(120, ctx.currentTime);
-      osc1.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.15);
-      osc1.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.8);
-      
-      osc2.frequency.setValueAtTime(260, ctx.currentTime);
-      osc2.frequency.linearRampToValueAtTime(950, ctx.currentTime + 0.2);
-
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.85);
-
+      osc1.frequency.setValueAtTime(140, ctx.currentTime);
+      osc1.frequency.linearRampToValueAtTime(850, ctx.currentTime + 0.15);
+      osc1.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.7);
+      osc2.frequency.setValueAtTime(300, ctx.currentTime);
+      osc2.frequency.linearRampToValueAtTime(1100, ctx.currentTime + 0.18);
+      gain.gain.setValueAtTime(0.32, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.75);
       osc1.connect(gain);
       osc2.connect(gain);
       gain.connect(ctx.destination);
-
       osc1.start();
       osc2.start();
-      osc1.stop(ctx.currentTime + 0.85);
-      osc2.stop(ctx.currentTime + 0.85);
+      osc1.stop(ctx.currentTime + 0.75);
+      osc2.stop(ctx.currentTime + 0.75);
     } catch {
       // Audio safety
     }
@@ -216,13 +263,13 @@ export default function App() {
       130.81, 146.83, 155.56, 174.61, 155.56, 146.83, 130.81, 116.54,
       130.81, 155.56, 174.61, 196.00, 174.61, 155.56, 130.81, 98.00
     ];
-    const melodyDisturbingBoss4 = [
-      65.41, 69.30, 61.74, 58.27, 82.41, 77.78, 65.41, 49.00,
-      61.74, 55.00, 58.27, 65.41, 49.00, 46.25, 65.41, 38.89
+    const melodyStage5Abyss = [
+      55.00, 58.27, 49.00, 46.25, 73.42, 69.30, 55.00, 41.20,
+      51.91, 46.25, 49.00, 55.00, 38.89, 41.20, 55.00, 32.70
     ];
-    const melodyVictory = [
-      523.25, 659.25, 783.99, 1046.50, 783.99, 659.25, 523.25, 587.33,
-      659.25, 783.99, 880.00, 1046.50, 880.00, 783.99, 659.25, 587.33
+    const melodyPeaceCutscene = [
+      523.25, 587.33, 659.25, 783.99, 880.00, 783.99, 659.25, 587.33,
+      523.25, 659.25, 783.99, 1046.5, 880.00, 783.99, 659.25, 523.25
     ];
 
     let noteIndex = 0;
@@ -230,17 +277,17 @@ export default function App() {
     let tempo = 200;
     let waveType = 'triangle';
 
-    if (gameState === 'victory') {
-      notes = melodyVictory;
-      tempo = 140;
+    if (gameState === 'clearing_cutscene' || gameState === 'victory') {
+      notes = melodyPeaceCutscene;
+      tempo = 160;
       waveType = 'sine';
-    } else if (phase === 4) {
-      notes = melodyDisturbingBoss4;
-      tempo = 120;
+    } else if (phase === 5) {
+      notes = melodyStage5Abyss;
+      tempo = 110;
       waveType = 'sawtooth';
-    } else if (phase === 3) {
+    } else if (phase === 4 || phase === 3) {
       notes = melodyBoss3;
-      tempo = 150;
+      tempo = 145;
       waveType = 'sawtooth';
     }
 
@@ -257,6 +304,126 @@ export default function App() {
 
   const addFloatingText = (text, x, y, color = '#facc15') => {
     animRef.current.floatingTexts.push({ text, x, y, color, life: 40 });
+  };
+
+  // Slower, Fair Stage 4 Wheel Skill Check
+  useEffect(() => {
+    if (!showFatalCircle) return;
+    circleAngleRef.current = 0;
+
+    const loop = () => {
+      circleAngleRef.current = (circleAngleRef.current + 3.8) % 360; // Fair, readable rotation speed
+      setCircleAngle(circleAngleRef.current);
+      circleAnimRef.current = requestAnimationFrame(loop);
+    };
+
+    circleAnimRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(circleAnimRef.current);
+  }, [showFatalCircle]);
+
+  const triggerFatalCircle = () => {
+    setIsTurnLocked(true);
+    const randomTarget = Math.floor(80 + Math.random() * 200);
+    setCircleTargetAngle(randomTarget);
+    setShowFatalCircle(true);
+    playSound(320, 'sawtooth', 0.2);
+  };
+
+  const handleStopFatalCircle = () => {
+    if (circleAnimRef.current) cancelAnimationFrame(circleAnimRef.current);
+    setShowFatalCircle(false);
+
+    const currentDeg = circleAngleRef.current;
+    const target = circleTargetAngle;
+    const tolerance = 38; // Generous 76-degree window
+
+    const diff = Math.abs(currentDeg - target);
+    const isSuccess = diff <= tolerance || (360 - diff) <= tolerance;
+
+    if (isSuccess) {
+      playSound(880, 'triangle', 0.3);
+      setBossFlash(true);
+      setTimeout(() => setBossFlash(false), 200);
+      addFloatingText("DEFLECTED!", 45, 110, '#34d399');
+      setBattleLog("⚡ GREAT REFLEXES! Charisse parried the Devourer's ambush!");
+      setIsTurnLocked(false);
+    } else {
+      playSound(120, 'sawtooth', 0.5);
+      const hitDamage = 40;
+      const remainingHp = Math.max(0, playerHp - hitDamage);
+      setPlayerHp(remainingHp);
+      addFloatingText(`-${hitDamage} HP!`, 40, 110, '#ef4444');
+      setBattleLog("⚠️ Ambush grazed your defenses! Stay alert!");
+      
+      if (remainingHp <= 0) {
+        setTimeout(() => setGameState('gameover'), 600);
+      } else {
+        setIsTurnLocked(false);
+      }
+    }
+  };
+
+  // Stage 5 Dual Parry Needle Oscillation
+  useEffect(() => {
+    if (!showDualParry) return;
+    let pos = 50;
+    let dir = 1.3;
+
+    const loop = () => {
+      pos += dir * 2.2;
+      if (pos >= 92) {
+        pos = 92;
+        dir = -1.3;
+      } else if (pos <= 8) {
+        pos = 8;
+        dir = 1.3;
+      }
+      setParryPos(pos);
+      parryAnimRef.current = requestAnimationFrame(loop);
+    };
+
+    parryAnimRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(parryAnimRef.current);
+  }, [showDualParry]);
+
+  const triggerDualParry = () => {
+    setIsTurnLocked(true);
+    playThunderSound();
+    setShowDualParry(true);
+  };
+
+  const handleStopDualParry = () => {
+    if (parryAnimRef.current) cancelAnimationFrame(parryAnimRef.current);
+    setShowDualParry(false);
+
+    // Two sweet spots: 18%-38% (Ray) or 62%-82% (Charisse)
+    const isSuccess = (parryPos >= 18 && parryPos <= 38) || (parryPos >= 62 && parryPos <= 82);
+
+    if (isSuccess) {
+      playSound(950, 'triangle', 0.3);
+      setBossFlash(true);
+      setScreenShake(true);
+      setTimeout(() => {
+        setBossFlash(false);
+        setScreenShake(false);
+      }, 300);
+      addFloatingText("PERFECT PARRY! 🛡️", 35, 110, '#38bdf8');
+      setBattleLog("✨ Ray and Charisse deflected the Titan's void beam!");
+      setSynergy((prev) => Math.min(100, prev + 35));
+      setIsTurnLocked(false);
+    } else {
+      playSound(100, 'sawtooth', 0.5);
+      const hitDmg = 45;
+      const remainingHp = Math.max(0, playerHp - hitDmg);
+      setPlayerHp(remainingHp);
+      addFloatingText(`-${hitDmg} HP!`, 35, 110, '#ef4444');
+      setBattleLog("💥 The Void Beam shattered your barrier!");
+      if (remainingHp <= 0) {
+        setTimeout(() => setGameState('gameover'), 600);
+      } else {
+        setIsTurnLocked(false);
+      }
+    }
   };
 
   // Standard Critical Recovery Needle Loop
@@ -282,59 +449,6 @@ export default function App() {
     return () => cancelAnimationFrame(needleAnimRef.current);
   }, [showNeedleMinigame]);
 
-  // Friday the 13th Fast Fatal Circle Skill Check Loop
-  useEffect(() => {
-    if (!showFatalCircle) return;
-    circleAngleRef.current = 0;
-
-    const loop = () => {
-      circleAngleRef.current = (circleAngleRef.current + 6.2) % 360; // Fast rotation
-      setCircleAngle(circleAngleRef.current);
-      circleAnimRef.current = requestAnimationFrame(loop);
-    };
-
-    circleAnimRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(circleAnimRef.current);
-  }, [showFatalCircle]);
-
-  const triggerFatalCircle = () => {
-    setIsTurnLocked(true);
-    const randomTarget = Math.floor(90 + Math.random() * 180);
-    setCircleTargetAngle(randomTarget);
-    setShowFatalCircle(true);
-    playSound(350, 'sawtooth', 0.2);
-  };
-
-  const handleStopFatalCircle = () => {
-    if (circleAnimRef.current) cancelAnimationFrame(circleAnimRef.current);
-    setShowFatalCircle(false);
-
-    const currentDeg = circleAngleRef.current;
-    const target = circleTargetAngle;
-    const tolerance = 24; // Tight Friday the 13th sweet spot window
-
-    const diff = Math.abs(currentDeg - target);
-    const isSuccess = diff <= tolerance || (360 - diff) <= tolerance;
-
-    if (isSuccess) {
-      playSound(880, 'triangle', 0.3);
-      setBossFlash(true);
-      setTimeout(() => setBossFlash(false), 200);
-      addFloatingText("KILLER PUSHED BACK!", 35, 110, '#34d399');
-      setBattleLog("⚡ PURE INSTINCT! Charisse dodged instant death and staggered the killer!");
-      setIsTurnLocked(false);
-    } else {
-      // Instant Death Failure
-      playSound(80, 'sawtooth', 0.7);
-      setPlayerHp(0);
-      setScreenShake(true);
-      setTimeout(() => setScreenShake(false), 400);
-      addFloatingText("EXECUTION!", 40, 110, '#ef4444');
-      setBattleLog("💀 MISSED SKILL CHECK! The Devourer executed your team instantly!");
-      setTimeout(() => setGameState('gameover'), 600);
-    }
-  };
-
   const animatePlayerAttack = (attacker = 'p1', callback) => {
     const targetX = 58;
     const targetY = -70;
@@ -347,27 +461,15 @@ export default function App() {
 
       if (progress < 0.45) {
         const t = progress / 0.45;
-        if (attacker === 'p1' || attacker === 'both') {
-          animRef.current.p1Offset = { x: targetX * t, y: targetY * t };
-        }
-        if (attacker === 'p2' || attacker === 'both') {
-          animRef.current.p2Offset = { x: (targetX - 10) * t, y: targetY * t };
-        }
+        if (attacker === 'p1' || attacker === 'both') animRef.current.p1Offset = { x: targetX * t, y: targetY * t };
+        if (attacker === 'p2' || attacker === 'both') animRef.current.p2Offset = { x: (targetX - 10) * t, y: targetY * t };
       } else if (progress < 0.65) {
-        if (attacker === 'p1' || attacker === 'both') {
-          animRef.current.p1Offset = { x: targetX, y: targetY };
-        }
-        if (attacker === 'p2' || attacker === 'both') {
-          animRef.current.p2Offset = { x: targetX - 10, y: targetY };
-        }
+        if (attacker === 'p1' || attacker === 'both') animRef.current.p1Offset = { x: targetX, y: targetY };
+        if (attacker === 'p2' || attacker === 'both') animRef.current.p2Offset = { x: targetX - 10, y: targetY };
       } else if (progress < 1) {
         const t = (progress - 0.65) / 0.35;
-        if (attacker === 'p1' || attacker === 'both') {
-          animRef.current.p1Offset = { x: targetX * (1 - t), y: targetY * (1 - t) };
-        }
-        if (attacker === 'p2' || attacker === 'both') {
-          animRef.current.p2Offset = { x: (targetX - 10) * (1 - t), y: targetY * (1 - t) };
-        }
+        if (attacker === 'p1' || attacker === 'both') animRef.current.p1Offset = { x: targetX * (1 - t), y: targetY * (1 - t) };
+        if (attacker === 'p2' || attacker === 'both') animRef.current.p2Offset = { x: (targetX - 10) * (1 - t), y: targetY * (1 - t) };
       } else {
         clearInterval(animInterval);
         animRef.current.p1Offset = { x: 0, y: 0 };
@@ -403,29 +505,19 @@ export default function App() {
     }, 16);
   };
 
-  const drawPineTree = (ctx, x, y, scale = 1, isCorrupted = false) => {
-    ctx.fillStyle = isCorrupted ? '#1a0505' : '#3e2723';
+  const drawPineTree = (ctx, x, y, scale = 1, isVoid = false) => {
+    ctx.fillStyle = isVoid ? '#0a0005' : '#3e2723';
     ctx.fillRect(x + 5 * scale, y + 24 * scale, 4 * scale, 8 * scale);
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath();
     ctx.ellipse(x + 7 * scale, y + 32 * scale, 8 * scale, 3 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = isCorrupted ? '#3b0707' : '#14532d';
+    ctx.fillStyle = isVoid ? '#2d0612' : '#14532d';
     ctx.fillRect(x + 1 * scale, y + 16 * scale, 12 * scale, 9 * scale);
-    ctx.fillStyle = isCorrupted ? '#500724' : '#166534';
+    ctx.fillStyle = isVoid ? '#4a041f' : '#166534';
     ctx.fillRect(x + 2 * scale, y + 17 * scale, 10 * scale, 6 * scale);
-    ctx.fillStyle = isCorrupted ? '#450a0a' : '#15803d';
-    ctx.fillRect(x + 3 * scale, y + 9 * scale, 8 * scale, 8 * scale);
-    ctx.fillStyle = isCorrupted ? '#7f1d1d' : '#22c55e';
+    ctx.fillStyle = isVoid ? '#70092b' : '#22c55e';
     ctx.fillRect(x + 4 * scale, y + 10 * scale, 6 * scale, 5 * scale);
-  };
-
-  const drawMossyRock = (ctx, x, y, w = 16, h = 10, isCorrupted = false) => {
-    ctx.fillStyle = isCorrupted ? '#180303' : '#475569';
-    ctx.fillRect(x + 2, y + 2, w - 4, h - 2);
-    ctx.fillRect(x, y + 4, w, h - 4);
-    ctx.fillStyle = isCorrupted ? '#7f1d1d' : '#22c55e';
-    ctx.fillRect(x + 3, y + 1, 6, 3);
   };
 
   const drawCuteCharisse = (ctx, x, y) => {
@@ -504,7 +596,7 @@ export default function App() {
     ctx.fillRect(x + 19, y + 5, 2, 12);
   };
 
-  // Canvas Render Loop with Blood Rain & Corrupted Stage 4
+  // Main Battle Render Loop
   useEffect(() => {
     if (gameState !== 'battle') return;
     const canvas = canvasRef.current;
@@ -523,7 +615,8 @@ export default function App() {
         ['#1e1b4b', '#312e81'],
         ['#064e3b', '#065f46'],
         ['#180521', '#3b0738'],
-        ['#200000', '#0a0000'] // Stage 4: Ominous blood abyss
+        ['#200000', '#0a0000'],
+        ['#050009', '#1d001a'] // Stage 5: Cosmic Dark Abyss
       ];
       const curSky = skyGradients[phase - 1] || skyGradients[0];
       const skyGrad = ctx.createLinearGradient(0, 0, 0, 100);
@@ -532,15 +625,15 @@ export default function App() {
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, 160, 240);
 
-      const isStage4 = phase === 4;
+      const isVoid = phase >= 4;
 
-      drawPineTree(ctx, 4, 42, 0.9, isStage4);
-      drawPineTree(ctx, 22, 38, 1.1, isStage4);
-      drawPineTree(ctx, 60, 36, 1.0, isStage4);
-      drawPineTree(ctx, 134, 40, 0.95, isStage4);
+      drawPineTree(ctx, 4, 42, 0.9, isVoid);
+      drawPineTree(ctx, 22, 38, 1.1, isVoid);
+      drawPineTree(ctx, 60, 36, 1.0, isVoid);
+      drawPineTree(ctx, 134, 40, 0.95, isVoid);
 
-      // Distorted Ground Terrain
-      ctx.fillStyle = isStage4 ? '#1a0303' : (phase === 3 ? '#0a0512' : '#0f172a');
+      // Distorted Ground
+      ctx.fillStyle = phase === 5 ? '#0c000d' : (phase === 4 ? '#1a0303' : (phase === 3 ? '#0a0512' : '#0f172a'));
       ctx.beginPath();
       ctx.moveTo(-10, 85);
       ctx.lineTo(40, 60);
@@ -550,7 +643,7 @@ export default function App() {
       ctx.lineTo(-10, 95);
       ctx.fill();
 
-      ctx.fillStyle = isStage4 ? '#2d0505' : (phase === 3 ? '#062817' : '#14532d');
+      ctx.fillStyle = phase === 5 ? '#1a001a' : (phase === 4 ? '#2d0505' : (phase === 3 ? '#062817' : '#14532d'));
       ctx.beginPath();
       ctx.moveTo(0, 95);
       ctx.lineTo(160, 65);
@@ -558,8 +651,8 @@ export default function App() {
       ctx.lineTo(0, 240);
       ctx.fill();
 
-      // Disturbed Pathway
-      ctx.fillStyle = isStage4 ? '#180202' : (phase === 3 ? '#1e1b2e' : '#334155');
+      // Pathway
+      ctx.fillStyle = phase === 5 ? '#100014' : (phase === 4 ? '#180202' : (phase === 3 ? '#1e1b2e' : '#334155'));
       ctx.beginPath();
       ctx.moveTo(20, 120);
       ctx.lineTo(145, 90);
@@ -567,17 +660,14 @@ export default function App() {
       ctx.lineTo(10, 215);
       ctx.fill();
 
-      drawMossyRock(ctx, 6, 98, 18, 11, isStage4);
-      drawMossyRock(ctx, 136, 175, 16, 9, isStage4);
-
-      // Boss Rendering
-      const bob = Math.sin(tick * (isStage4 ? 0.16 : 0.08)) * (isStage4 ? 4 : 2);
+      // Boss Sprite
+      const bob = Math.sin(tick * (phase === 5 ? 0.22 : 0.08)) * (phase === 5 ? 5 : 2);
       const bX = 96 + animRef.current.bossOffset.x;
       const bY = 34 + animRef.current.bossOffset.y + bob;
 
       if (bossFlash) {
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(bX - 4, bY - 4, 48, 48);
+        ctx.fillRect(bX - 6, bY - 6, 52, 52);
       } else {
         if (phase === 1) {
           ctx.fillStyle = '#4c1d95';
@@ -601,36 +691,40 @@ export default function App() {
           ctx.fillStyle = '#facc15';
           ctx.fillRect(bX + 10, bY + 11, 7, 4);
           ctx.fillRect(bX + 23, bY + 11, 7, 4);
-        } else {
-          // STAGE 4: SCARY DREAD DEVOURER (Demonic pixel beast with glitch aura)
+        } else if (phase === 4) {
           ctx.fillStyle = '#450a0a';
           ctx.fillRect(bX - 2, bY, 44, 40);
           ctx.fillStyle = '#7f1d1d';
           ctx.fillRect(bX + 4, bY - 4, 32, 44);
-          
-          // Bleeding demon eyes
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(bX + 8, bY + 8, 8, 7);
           ctx.fillRect(bX + 24, bY + 8, 8, 7);
           ctx.fillStyle = '#dc2626';
           ctx.fillRect(bX + 11, bY + 10, 3, 3);
           ctx.fillRect(bX + 27, bY + 10, 3, 3);
+        } else {
+          // STAGE 5: ABYSS VOID TITAN (Giant shadow entity with 4 glowing eye slits)
+          ctx.fillStyle = '#1e0024';
+          ctx.fillRect(bX - 8, bY - 12, 56, 56);
+          ctx.fillStyle = '#380042';
+          ctx.fillRect(bX - 4, bY - 8, 48, 50);
 
-          // Blood drip tears
-          ctx.fillStyle = '#991b1b';
-          ctx.fillRect(bX + 11, bY + 16, 2, 8);
-          ctx.fillRect(bX + 27, bY + 16, 2, 8);
+          // Pulsing dark void core
+          ctx.fillStyle = Math.sin(tick * 0.2) > 0 ? '#ff0055' : '#7700ff';
+          ctx.fillRect(bX + 14, bY + 16, 12, 12);
 
-          // Serrated Horns
-          ctx.fillStyle = '#171717';
-          ctx.fillRect(bX + 2, bY - 9, 5, 10);
-          ctx.fillRect(bX + 33, bY - 9, 5, 10);
+          // 4 Ominous Glowing Eyes
+          ctx.fillStyle = '#facc15';
+          ctx.fillRect(bX + 2, bY, 6, 3);
+          ctx.fillRect(bX + 32, bY, 6, 3);
+          ctx.fillStyle = '#ff0033';
+          ctx.fillRect(bX + 8, bY + 7, 8, 3);
+          ctx.fillRect(bX + 24, bY + 7, 8, 3);
 
-          // Sharp jaw
-          ctx.fillStyle = '#f8fafc';
-          for (let tooth = 0; tooth < 4; tooth++) {
-            ctx.fillRect(bX + 8 + tooth * 6, bY + 28, 3, 4);
-          }
+          // Void Wings / Tentacles
+          ctx.fillStyle = '#220028';
+          ctx.fillRect(bX - 14, bY + 8, 8, 22);
+          ctx.fillRect(bX + 46, bY + 8, 8, 22);
         }
       }
 
@@ -643,27 +737,27 @@ export default function App() {
       const p1Y = 138 + animRef.current.p1Offset.y;
       drawCuteCharisse(ctx, p1X, p1Y);
 
-      // WEATHER: Stage 3 Regular Rain | Stage 4 BLOOD RAIN & DISTORTION
-      if (phase === 3 || phase === 4) {
-        ctx.strokeStyle = phase === 4 ? 'rgba(239, 68, 68, 0.75)' : 'rgba(186, 230, 253, 0.45)';
-        ctx.lineWidth = phase === 4 ? 1.5 : 1;
+      // Rain / Thunder / Void Weather
+      if (phase === 3 || phase === 4 || phase === 5) {
+        ctx.strokeStyle = phase === 5 ? 'rgba(216, 70, 239, 0.7)' : (phase === 4 ? 'rgba(239, 68, 68, 0.65)' : 'rgba(186, 230, 253, 0.45)');
+        ctx.lineWidth = phase >= 4 ? 1.5 : 1;
         animRef.current.rainDrops.forEach((drop) => {
           ctx.beginPath();
           ctx.moveTo(drop.x, drop.y);
-          ctx.lineTo(drop.x - (phase === 4 ? 3 : 2), drop.y + drop.length);
+          ctx.lineTo(drop.x - (phase === 5 ? 4 : 2), drop.y + drop.length);
           ctx.stroke();
 
-          drop.y += drop.speed * (phase === 4 ? 1.3 : 1);
-          drop.x -= 0.7;
+          drop.y += drop.speed * (phase === 5 ? 1.4 : 1);
+          drop.x -= 0.8;
           if (drop.y > 240) {
             drop.y = -5;
             drop.x = Math.random() * 165;
           }
         });
 
-        // Stage 4 Red Lightning / Disturbing Static Flash
-        if (phase === 4 && Math.random() < 0.04) {
-          ctx.fillStyle = 'rgba(220, 38, 38, 0.28)';
+        // Stage 5 Violent Lightning Flashes
+        if (phase === 5 && Math.random() < 0.05) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
           ctx.fillRect(0, 0, 160, 240);
         }
       }
@@ -687,16 +781,113 @@ export default function App() {
     return () => cancelAnimationFrame(frameId);
   }, [gameState, phase, bossFlash]);
 
-  // ================= QTE COMBO SEQUENCE =================
+  // Cinematic Epilogue Canvas Render (The Sun Comes Out, Petals, Freedom)
+  useEffect(() => {
+    if (gameState !== 'clearing_cutscene') return;
+    const canvas = cutsceneCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    let frameId;
+    let tick = 0;
+
+    const renderCutscene = () => {
+      tick++;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Bright Sunny Sky
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, 120);
+      skyGrad.addColorStop(0, '#38bdf8');
+      skyGrad.addColorStop(1, '#bae6fd');
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, 160, 240);
+
+      // Radiant Warm Sun with Beams
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.arc(80, 45, 18 + Math.sin(tick * 0.05) * 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Sunbeams
+      ctx.strokeStyle = 'rgba(254, 240, 138, 0.35)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 8; i++) {
+        const angle = (tick * 0.01) + (i * (Math.PI / 4));
+        ctx.beginPath();
+        ctx.moveTo(80, 45);
+        ctx.lineTo(80 + Math.cos(angle) * 70, 45 + Math.sin(angle) * 70);
+        ctx.stroke();
+      }
+
+      // Beautiful Emerald Hills
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.moveTo(0, 110);
+      ctx.quadraticCurveTo(80, 90, 160, 115);
+      ctx.lineTo(160, 240);
+      ctx.lineTo(0, 240);
+      ctx.fill();
+
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.moveTo(0, 130);
+      ctx.quadraticCurveTo(80, 115, 160, 135);
+      ctx.lineTo(160, 240);
+      ctx.lineTo(0, 240);
+      ctx.fill();
+
+      drawPineTree(ctx, 6, 75, 0.95, false);
+      drawPineTree(ctx, 130, 80, 0.9, false);
+
+      // Blooming Flower Meadow
+      for (let f = 10; f < 155; f += 18) {
+        ctx.fillStyle = f % 2 === 0 ? '#f43f5e' : '#ec4899';
+        ctx.fillRect(f, 185 + (f % 6), 3, 3);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(f + 1, 186 + (f % 6), 1, 1);
+      }
+
+      // Falling Cherry Blossom Petals
+      ctx.fillStyle = 'rgba(244, 114, 182, 0.75)';
+      animRef.current.petals.forEach((p) => {
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y, p.size, p.size * 0.6, Math.PI / 4, 0, Math.PI * 2);
+        ctx.fill();
+        p.y += p.speedY;
+        p.x += p.speedX;
+        if (p.y > 240) {
+          p.y = -5;
+          p.x = Math.random() * 160;
+        }
+      });
+
+      // Charisse and Ray Standing Close in the Sun
+      drawCuteCharisse(ctx, 50, 140);
+      drawCuteRay(ctx, 84, 140);
+
+      // Big Floating Heart Between Them
+      ctx.fillStyle = '#f43f5e';
+      ctx.font = '12px "Press Start 2P"';
+      ctx.fillText("❤️", 73, 132 + Math.sin(tick * 0.1) * 3);
+
+      frameId = requestAnimationFrame(renderCutscene);
+    };
+
+    renderCutscene();
+    return () => cancelAnimationFrame(frameId);
+  }, [gameState]);
+
+  // QTE Attack System
   const initiateAttack = (actionKey) => {
-    if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive) return;
+    if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || showDualParry || bossIntro || jumpscareActive) return;
     setAttackWarning("");
     setPendingAction(actionKey);
     setQteScale(2.3);
     setQteStep('timed');
 
     const start = Date.now();
-    const duration = phase === 4 ? 750 : (phase === 3 ? 900 : 1100); // Tighter on harder stages
+    const duration = phase === 5 ? 850 : 1000;
 
     if (qteTimerRef.current) clearInterval(qteTimerRef.current);
 
@@ -731,7 +922,7 @@ export default function App() {
     setMashTimer(100);
 
     const startTime = Date.now();
-    const duration = phase === 4 ? 1700 : 2200; // Faster mash required for Stage 4
+    const duration = 2200;
 
     if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
 
@@ -752,9 +943,7 @@ export default function App() {
     const nextCount = mashCount + 1;
     setMashCount(nextCount);
 
-    const targetMashes = phase === 4 ? 10 : 8;
-
-    if (nextCount >= targetMashes) {
+    if (nextCount >= 8) {
       if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
       playSound(780, 'triangle', 0.15);
 
@@ -774,7 +963,7 @@ export default function App() {
     setQteStep('swipe');
 
     const startTime = Date.now();
-    const duration = phase === 4 ? 2100 : 3000; // Stage 4 swipe window is fast!
+    const duration = phase === 5 ? 2600 : 3000;
 
     if (subQteTimerRef.current) clearInterval(subQteTimerRef.current);
 
@@ -863,16 +1052,30 @@ export default function App() {
     setTimeout(() => bossCounterAttack(true), 700);
   };
 
+  const shiftBossStance = () => {
+    const stances = ['comm', 'food', 'hug'];
+    const currentIdx = stances.indexOf(dynamicWeakness);
+    const nextStance = stances[(currentIdx + 1) % stances.length];
+    setDynamicWeakness(nextStance);
+
+    playSound(450, 'sine', 0.2);
+    setBossFlash(true);
+    setTimeout(() => setBossFlash(false), 200);
+
+    const names = { comm: 'LOVE / COMMUNICATE 💌', food: 'FOOD / TREATS 🍔', hug: 'HUGS / REASSURANCE 🫂' };
+    setBattleLog(`🛡️ SHIFT! ${currentBoss.name} changed shield to: ${names[nextStance]}!`);
+  };
+
   const resolveTurn = (actionKey, isCrit) => {
     setIsTurnLocked(true);
-    const isEffective = actionKey === currentBoss.weakness;
+    const isEffective = actionKey === dynamicWeakness;
 
     animatePlayerAttack('both', () => {
       if (!isEffective) {
         playSound(200, 'sawtooth', 0.15);
-        addFloatingText("BLOCKED!", 100, 35, '#94a3b8');
-        setAttackWarning(`INEFFECTIVE! That won't work on this monster!`);
-        setBattleLog(`That won't work on this monster! (${currentBoss.hint})`);
+        addFloatingText("SHIELD BLOCKED!", 100, 35, '#94a3b8');
+        setAttackWarning(`SHIELD ACTIVE! It is weak to ${dynamicWeakness.toUpperCase()} right now!`);
+        setBattleLog(`Blocked! Monster changed stance! Check its weakness aura!`);
         setTimeout(() => bossCounterAttack(false), 600);
         return;
       }
@@ -884,46 +1087,41 @@ export default function App() {
         setScreenShake(false);
       }, 350);
 
-      const baseDmg = isCrit ? (phase === 4 ? 45 : 55) : 30;
+      const baseDmg = isCrit ? (phase === 5 ? 40 : 50) : 30;
       playSound(isCrit ? 700 : 500, 'triangle', 0.15);
       addFloatingText(isCrit ? `CRIT! -${baseDmg}` : `-${baseDmg}`, 95, 30, isCrit ? '#f43f5e' : '#facc15');
-
-      let hitMsg = "";
-      if (actionKey === 'comm') {
-        hitMsg = isCrit ? "💥 UNBREAKABLE TRUST! Honest communication struck the darkness!" : "💌 Heartfelt words struck home!";
-      } else if (actionKey === 'food') {
-        hitMsg = isCrit ? "💥 CRITICAL FEAST! Fed burger & milk tea! Goblin is docile!" : "🍔 Fed treats to the Goblin!";
-      } else if (actionKey === 'hug') {
-        hitMsg = isCrit ? "💥 3-HIT AIR FINISHER! Warm reassurance pierced the phantom!" : "🫂 Warm hugs calmed the monster!";
-      }
 
       const nextBossHp = Math.max(0, bossHp - baseDmg);
       setBossHp(nextBossHp);
       setSynergy((prev) => Math.min(100, prev + (isCrit ? 40 : 25)));
-      setBattleLog(hitMsg);
+      setBattleLog("💥 Direct hit broke through the barrier!");
 
       if (nextBossHp <= 0) {
         setTimeout(() => advancePhase(), 800);
       } else {
+        // Monster shifts weakness mid-fight!
+        if (Math.random() < 0.65) {
+          setTimeout(() => shiftBossStance(), 400);
+        }
         setTimeout(() => bossCounterAttack(false), 900);
       }
     });
   };
 
   const executeHeal = () => {
-    if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive) return;
+    if (isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || showDualParry || bossIntro || jumpscareActive) return;
     setIsTurnLocked(true);
     setAttackWarning("");
     playSound(580, 'sine', 0.2);
-    const restored = Math.min(100, playerHp + 30);
+    const restored = Math.min(100, playerHp + 35);
     setPlayerHp(restored);
-    addFloatingText("+30 HP", 35, 140, '#34d399');
-    setBattleLog("🧪 Shared Warm Milk Tea! Restored 30 HP to our team!");
+    addFloatingText("+35 HP", 35, 140, '#34d399');
+    setBattleLog("🧪 Shared Warm Milk Tea! Restored 35 HP to our team!");
     setTimeout(() => bossCounterAttack(false), 900);
   };
 
   const executeUltimate = () => {
-    if (synergy < 100 || isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive) return;
+    if (synergy < 100 || isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || showDualParry || bossIntro || jumpscareActive) return;
     setIsTurnLocked(true);
     setAttackWarning("");
     setSynergy(0);
@@ -935,15 +1133,15 @@ export default function App() {
 
       setBossFlash(true);
       setScreenShake(true);
-      addFloatingText("DUO STRIKE! -80", 85, 25, '#ec4899');
+      addFloatingText("DUO STRIKE! -75", 85, 25, '#ec4899');
       setTimeout(() => {
         setBossFlash(false);
         setScreenShake(false);
       }, 400);
 
-      const nextBossHp = Math.max(0, bossHp - 80);
+      const nextBossHp = Math.max(0, bossHp - 75);
       setBossHp(nextBossHp);
-      setBattleLog("🌟 DUO ULTIMATE: 'May 9th Starlight Strike' breaks through all defenses!");
+      setBattleLog("🌟 DUO ULTIMATE: 'May 9th Starlight Strike' shatters all darkness!");
 
       if (nextBossHp <= 0) {
         setTimeout(() => advancePhase(), 800);
@@ -959,7 +1157,7 @@ export default function App() {
       setScreenShake(true);
       setTimeout(() => setScreenShake(false), 300);
 
-      const damage = (isHeavyHit ? 30 : 20) + (phase * 5);
+      const damage = (isHeavyHit ? 25 : 16) + (phase * 3);
       const remainingHp = Math.max(0, playerHp - damage);
       setPlayerHp(remainingHp);
       addFloatingText(`-${damage} HP`, 35, 140, '#ef4444');
@@ -968,8 +1166,11 @@ export default function App() {
         playSound(100, 'sawtooth', 0.5);
         setBattleLog("💀 Team HP hit 0! You were defeated...");
         setTimeout(() => setGameState('gameover'), 700);
-      } else if (phase === 4 && Math.random() < 0.55) {
-        // Friday the 13th instant-kill ambush counter trigger on Stage 4!
+      } else if (phase === 5 && Math.random() < 0.6) {
+        // Stage 5 Void Beam Dual Parry Check!
+        setTimeout(() => triggerDualParry(), 500);
+      } else if (phase === 4 && Math.random() < 0.5) {
+        // Stage 4 Wheel Check
         setTimeout(() => triggerFatalCircle(), 500);
       } else if (remainingHp <= 35) {
         setIsTurnLocked(true);
@@ -1023,55 +1224,55 @@ export default function App() {
   };
 
   const advancePhase = () => {
-    if (phase < 4) {
+    if (phase < 5) {
       const nextPhase = phase + 1;
       setPhase(nextPhase);
       setBossHp(100);
-      setPlayerHp((p) => Math.min(100, p + 30));
+      setPlayerHp((p) => Math.min(100, p + 35));
       setAttackWarning("");
 
-      if (nextPhase === 4) {
-        // STAGE 4: JUMPSCARE & NIGHTMARE TRANSITION
+      if (nextPhase === 5) {
+        // FINAL STAGE 5 VOID TITAN ENTRANCE
         setIsTurnLocked(true);
         setJumpscareActive(true);
         setScreenShake(true);
         playJumpscareSound();
 
-        // 1.1s jumpscare flash
         setTimeout(() => {
           setJumpscareActive(false);
           setScreenShake(false);
-          setFinalBossIntro(true);
+          setBossIntro(true);
+          playThunderSound();
 
           setTimeout(() => {
-            setFinalBossIntro(false);
-            setBattleLog("🩸 BLOOD RAIN DESCENDS: The Dread Devourer hungers for your souls!");
+            setBossIntro(false);
+            setBattleLog("⚡ FINAL BATTLE: The Void Titan rises from the apocalypse storm!");
             setIsTurnLocked(false);
-          }, 1800);
+          }, 2000);
         }, 1100);
 
-      } else if (nextPhase === 3) {
+      } else if (nextPhase === 4) {
         setIsTurnLocked(true);
-        setFinalBossIntro(true);
-        playSound(100, 'sawtooth', 0.4);
-        setTimeout(() => playSound(180, 'sawtooth', 0.5), 300);
+        setBossIntro(true);
+        playSound(150, 'sawtooth', 0.4);
 
         setTimeout(() => {
-          setFinalBossIntro(false);
-          setBattleLog("🌧️ STAGE 3: Rain pours as Overthinking Phantom stirs!");
+          setBossIntro(false);
+          setBattleLog("🩸 STAGE 4: Blood rain begins as the Dread Devourer strikes!");
           setIsTurnLocked(false);
-        }, 1500);
+        }, 1600);
       } else {
         playSound(660, 'sine', 0.2);
-        setBattleLog(`🔥 BOSS DOWN! Warning: ${bosses[phase].title}!`);
+        setBattleLog(`🔥 STAGE CLEARED! Warning: ${bosses[phase].title}!`);
         setIsTurnLocked(false);
       }
     } else {
-      // Defeated All 4 Stages
+      // ALL 5 STAGES DEFEATED: TRIGGER EPILOGUE CUTSCENE!
       setIsTurnLocked(true);
       playFanfare();
-      confetti({ particleCount: 160, spread: 100, origin: { y: 0.6 } });
-      setTimeout(() => setGameState('victory'), 800);
+      confetti({ particleCount: 180, spread: 100, origin: { y: 0.6 } });
+      setGameState('clearing_cutscene');
+      setCutsceneStep(1);
     }
   };
 
@@ -1080,10 +1281,12 @@ export default function App() {
     setBossHp(100);
     setPlayerHp(100);
     setSynergy(0);
+    setDynamicWeakness('comm');
     setQteStep(null);
-    setFinalBossIntro(false);
+    setBossIntro(false);
     setJumpscareActive(false);
     setShowFatalCircle(false);
+    setShowDualParry(false);
     setShowNeedleMinigame(false);
     setShowTriviaModal(false);
     setAttackWarning("");
@@ -1111,7 +1314,7 @@ export default function App() {
     },
     {
       caption: "Happy 4-Month Anniversary, My Love! ✨",
-      note: "Dating you since May 9 has been the happiest 4 months of my life. You conquered all 4 terrifying trials and proved our love can survive any nightmare. I love you forever Charisse! ❤️",
+      note: "Dating you since May 9 has been the happiest 4 months of my life. You conquered all 5 trials and proved our bond is unbreakable. I love you forever Charisse! ❤️",
       emoji: "🎮"
     }
   ];
@@ -1120,11 +1323,9 @@ export default function App() {
     <div className="w-full h-[100dvh] flex items-center justify-center font-cozy text-white select-none bg-black overflow-hidden p-0">
       <div className={`w-full max-w-[430px] h-full flex flex-col justify-between relative bg-slate-950 border-x border-slate-800 shadow-2xl overflow-hidden ${screenShake ? 'animate-shake' : ''}`}>
 
-        {/* ================= SCREEN 1: LANDING & BRIEFING ================= */}
+        {/* ================= SCREEN 1: LANDING ================= */}
         {gameState === 'landing' && (
           <div className="w-full h-full flex flex-col justify-between p-3.5 sm:p-5 text-center overflow-hidden">
-            
-            {/* Top Navigation Bar */}
             <div className="w-full flex justify-between items-center shrink-0 pt-0.5">
               <span className="font-pixel text-[8px] text-pink-400 bg-pink-950/80 border border-pink-700/60 px-2.5 py-1 rounded-full">
                 MAY 9, 2026 ➔ TODAY ❤️
@@ -1150,53 +1351,36 @@ export default function App() {
               </div>
             </div>
 
-            {/* Hero Section */}
             <div className="flex flex-col items-center my-auto gap-1.5 shrink-0 py-1">
               <div className="relative my-0.5">
-                <div className="text-4xl sm:text-5xl animate-bounce">👾💀💖</div>
+                <div className="text-4xl sm:text-5xl animate-bounce">⚔️💖👹</div>
                 <Sparkles className="absolute -top-1.5 -right-2 text-yellow-300 animate-spin" size={18} />
               </div>
 
               <div>
                 <h1 className="font-pixel text-xs sm:text-sm text-pink-200 tracking-wider leading-snug">
                   4-MONTH ANNIVERSARY QUEST<br />
-                  <span className="text-red-400 font-bold tracking-widest text-[9px]">NIGHTMARE HARD MODE</span>
+                  <span className="text-purple-400 font-bold tracking-widest text-[8.5px]">5 STAGES • DYNAMIC STANCES</span>
                 </h1>
                 <p className="text-[10px] text-pink-300/80 mt-0.5">
-                  Dating Since May 9, 2026 • 4 Brutal Bosses
+                  Dating Since May 9, 2026 • 123 Days of Love
                 </p>
               </div>
 
-              {/* Hard Mode Combos Info */}
-              <div className="bg-purple-950/80 border border-purple-800 rounded-xl p-2.5 w-full max-w-[340px] text-left shadow-2xl backdrop-blur-md space-y-1 mt-1">
+              <div className="bg-purple-950/80 border border-purple-800 rounded-xl p-2.5 w-full max-w-[340px] text-left shadow-2xl backdrop-blur-md space-y-1 mt-0.5">
                 <div className="font-pixel text-[7.5px] text-yellow-300 border-b border-purple-800/80 pb-0.5 flex items-center justify-between tracking-wider">
-                  <span>QUEST BOSSES</span>
-                  <span className="text-pink-300">SURVIVAL MECHANICS</span>
+                  <span>COMBAT INTELLIGENCE</span>
+                  <span className="text-pink-300">5 TRIALS</span>
                 </div>
 
-                <div className="bg-purple-900/40 p-1.5 rounded-lg border border-purple-700/50 flex items-center justify-between text-[10px]">
-                  <span className="text-pink-100 font-bold">1. Ego Monster</span>
-                  <span className="font-pixel text-[7px] text-pink-300 bg-pink-950 px-1.5 py-0.5 rounded">⚡ TIMED TAP</span>
-                </div>
-
-                <div className="bg-purple-900/40 p-1.5 rounded-lg border border-purple-700/50 flex items-center justify-between text-[10px]">
-                  <span className="text-pink-100 font-bold">2. Hangry Goblin</span>
-                  <span className="font-pixel text-[7px] text-emerald-300 bg-emerald-950 px-1.5 py-0.5 rounded">💓 TAP + MASH</span>
-                </div>
-
-                <div className="bg-purple-900/40 p-1.5 rounded-lg border border-purple-700/50 flex items-center justify-between text-[10px]">
-                  <span className="text-pink-100 font-bold">3. Overthink Phantom</span>
-                  <span className="font-pixel text-[6.5px] text-purple-300 bg-purple-950 px-1.5 py-0.5 rounded">🌧️ RAIN + SWIPES</span>
-                </div>
-
-                <div className="bg-red-950/70 p-1.5 rounded-lg border border-red-700/80 flex items-center justify-between text-[10px]">
-                  <span className="text-red-200 font-bold flex items-center gap-1"><Flame size={11} className="text-red-500 animate-pulse" /> 4. Dread Devourer</span>
-                  <span className="font-pixel text-[6.5px] text-red-300 bg-red-900 px-1.5 py-0.5 rounded animate-pulse">🩸 FATAL CIRCLE</span>
+                <div className="text-[10px] text-pink-200 space-y-1">
+                  <p>🛡️ <b>Dynamic Shields:</b> Monsters shift weaknesses mid-battle! Watch their aura.</p>
+                  <p>🎡 <b>Stage 4:</b> Deflect the Devourer's ambush with the spinning dial!</p>
+                  <p>⚡ <b>Stage 5:</b> Stop the parry needle in Ray or Charisse's defense zones to deflect the Void Titan!</p>
                 </div>
               </div>
             </div>
 
-            {/* Bottom Button */}
             <div className="w-full shrink-0 pt-2 pb-1">
               <button
                 onClick={() => {
@@ -1204,7 +1388,7 @@ export default function App() {
                   playSound(440, 'triangle', 0.15);
                   setGameState('battle');
                 }}
-                className="w-full font-pixel text-xs bg-gradient-to-r from-pink-500 via-rose-500 to-red-600 hover:from-pink-600 hover:to-red-700 py-3.5 rounded-xl shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 tracking-wider transform active:scale-95 transition-all"
+                className="w-full font-pixel text-xs bg-gradient-to-r from-pink-500 via-purple-600 to-rose-600 hover:from-pink-600 hover:to-rose-700 py-3.5 rounded-xl shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 tracking-wider transform active:scale-95 transition-all"
               >
                 START BATTLE <ArrowRight size={14} />
               </button>
@@ -1215,7 +1399,7 @@ export default function App() {
         {/* ================= INSTRUCTIONS MODAL ================= */}
         {showInstructions && (
           <div className="absolute inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border-2 border-red-500/80 rounded-2xl p-4 max-w-[320px] w-full text-left relative shadow-2xl">
+            <div className="bg-slate-900 border-2 border-purple-500/80 rounded-2xl p-4 max-w-[320px] w-full text-left relative shadow-2xl">
               <button 
                 onClick={() => setShowInstructions(false)}
                 className="absolute top-3.5 right-3.5 text-slate-400 hover:text-white"
@@ -1223,22 +1407,23 @@ export default function App() {
                 <X size={16} />
               </button>
               
-              <div className="flex items-center gap-2 font-pixel text-xs text-red-400 mb-2.5">
+              <div className="flex items-center gap-2 font-pixel text-xs text-purple-300 mb-2.5">
                 <ShieldCheck size={16} />
-                <span>NIGHTMARE RULES</span>
+                <span>COMBAT MECHANICS</span>
               </div>
               
               <div className="text-[11px] text-slate-300 space-y-2 leading-relaxed">
-                <p>🎯 <b>STAGE 1 & 2:</b> Rapid tap reactions and heart mash!</p>
-                <p>🪄 <b>STAGE 3:</b> Rain storm swipe chain (Left ➔ Right ➔ Up/Down)!</p>
-                <p>🩸 <b>STAGE 4 (FRIDAY 13TH SKILL CHECK):</b> The Dread Devourer ambushes with a spinning wheel! You MUST press <b>HIT SKILL CHECK</b> exactly when the red needle lands in the white target slice. If you miss, you die instantly!</p>
+                <p>🔄 <b>Dynamic Stances:</b> Monsters change weaknesses during combat. Look at the top banner to see if you should use <b>COMMUNICATE</b>, <b>BURGER</b>, or <b>HUG</b>!</p>
+                <p>🎡 <b>Stage 4 Ambush:</b> Stop the needle in the white sector to deflect damage!</p>
+                <p>⚡ <b>Stage 5 Void Beam:</b> Press <b>PARRY BEAM</b> in the blue (Ray) or pink (Charisse) sweet spot!</p>
+                <p>☀️ Defeat Stage 5 to break the curse and unlock the peaceful ending meadow!</p>
               </div>
 
               <button
                 onClick={() => setShowInstructions(false)}
-                className="w-full mt-3.5 font-pixel text-[9px] bg-red-600 hover:bg-red-700 py-2 rounded-lg text-center"
+                className="w-full mt-3.5 font-pixel text-[9px] bg-purple-600 hover:bg-purple-700 py-2 rounded-lg text-center"
               >
-                I AM READY!
+                GOT IT!
               </button>
             </div>
           </div>
@@ -1260,9 +1445,9 @@ export default function App() {
               {/* Top Left: Stage Badge + Sound Toggle Group */}
               <div className="absolute top-2 left-2 z-40 flex items-center gap-1.5">
                 <div className={`border px-2 py-1 rounded-md font-pixel text-[7.5px] shadow-md ${
-                  phase === 4 ? 'bg-red-950/90 border-red-600 text-red-300 animate-pulse' : 'bg-black/80 border-slate-700 text-yellow-300'
+                  phase === 5 ? 'bg-purple-950/90 border-purple-500 text-purple-300 animate-pulse' : (phase === 4 ? 'bg-red-950/90 border-red-600 text-red-300' : 'bg-black/80 border-slate-700 text-yellow-300')
                 }`}>
-                  STAGE {phase}/4 {phase === 4 ? '🩸' : (phase === 3 ? '🌧️' : '')}
+                  STAGE {phase}/5 {phase === 5 ? '⚡' : (phase === 4 ? '🩸' : (phase === 3 ? '🌧️' : ''))}
                 </div>
                 <button
                   onClick={() => {
@@ -1278,7 +1463,7 @@ export default function App() {
 
               {/* Top Right: Full Uncropped Boss Health Card */}
               <div className={`absolute top-2 right-2 border p-1.5 px-2 rounded-lg min-w-[150px] shadow-lg z-30 ${
-                phase === 4 ? 'bg-red-950/90 border-red-600 shadow-red-900/50' : 'bg-black/85 border-slate-700'
+                phase === 5 ? 'bg-purple-950/90 border-purple-500 shadow-purple-900/50' : (phase === 4 ? 'bg-red-950/90 border-red-600' : 'bg-black/85 border-slate-700')
               }`}>
                 <div className="flex justify-between items-center gap-2 font-pixel text-[7.5px] text-pink-300 mb-0.5 whitespace-nowrap">
                   <span className="tracking-tight">{currentBoss.name}</span>
@@ -1287,11 +1472,19 @@ export default function App() {
                 <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                   <div 
                     className={`h-full transition-all duration-300 ${
-                      phase === 4 ? 'bg-gradient-to-r from-red-600 via-rose-500 to-black' : 'bg-gradient-to-r from-rose-500 to-pink-500'
+                      phase === 5 ? 'bg-gradient-to-r from-purple-600 via-pink-500 to-amber-300' : (phase === 4 ? 'bg-gradient-to-r from-red-600 via-rose-500 to-black' : 'bg-gradient-to-r from-rose-500 to-pink-500')
                     }`}
                     style={{ width: `${bossHp}%` }}
                   />
                 </div>
+              </div>
+
+              {/* Dynamic Weakness Indicator Badge */}
+              <div className="absolute top-10 right-2 z-30 bg-black/80 border border-amber-400/80 px-2 py-0.5 rounded-full font-pixel text-[6.5px] text-amber-300 flex items-center gap-1 shadow-md">
+                <span>WEAKNESS:</span>
+                <span className="text-white font-bold">
+                  {dynamicWeakness === 'comm' ? '💌 LOVE' : (dynamicWeakness === 'food' ? '🍔 FOOD' : '🫂 HUG')}
+                </span>
               </div>
 
               {/* Team Health Bar */}
@@ -1311,54 +1504,90 @@ export default function App() {
                 </div>
               </div>
 
-              {/* STAGE 4 JUMPSCARE POP-UP OVERLAY */}
+              {/* Jumpscare Overlay */}
               {jumpscareActive && (
                 <div className="absolute inset-0 z-50 bg-red-950 flex flex-col items-center justify-center p-4 overflow-hidden animate-shake">
-                  <div className="text-7xl sm:text-8xl animate-ping select-none">👹</div>
+                  <div className="text-8xl animate-ping select-none">👁️⚡</div>
                   <div className="absolute inset-0 bg-red-600/40 mix-blend-color-dodge animate-pulse" />
-                  <h1 className="font-pixel text-lg sm:text-xl text-white tracking-widest mt-4 drop-shadow-[0_0_20px_rgba(255,0,0,1)] animate-bounce">
-                    LOOK BEHIND YOU!
+                  <h1 className="font-pixel text-lg sm:text-xl text-white tracking-widest mt-4 drop-shadow-[0_0_20px_rgba(255,0,0,1)] animate-bounce text-center">
+                    THE ABYSS CONSUMES!
                   </h1>
                 </div>
               )}
 
-              {/* Level 3 & 4 Ominous Entrance Flash */}
-              {finalBossIntro && (
+              {/* Boss Entrances */}
+              {bossIntro && (
                 <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center text-center p-4">
-                  <span className="font-pixel text-[8px] text-red-400 bg-black px-3 py-1 rounded-full border border-red-500 mb-2 animate-bounce">
-                    {phase === 4 ? '🩸 FATAL TRIAL: BLOOD ABYSS 🩸' : '🌧️ STAGE 3: RAINSTORM 🌧️'}
+                  <span className="font-pixel text-[8px] text-yellow-400 bg-black px-3 py-1 rounded-full border border-yellow-500 mb-2 animate-bounce">
+                    {phase === 5 ? '⚡ FINAL BATTLE: VOID APOCALYPSE ⚡' : '🩸 STAGE 4: BLOOD ABYSS 🩸'}
                   </span>
-                  <h2 className="font-pixel text-sm sm:text-base text-white tracking-widest leading-relaxed drop-shadow-[0_0_15px_rgba(239,68,68,0.9)]">
-                    {phase === 4 ? 'THE DREAD DEVOURER\nAWAKENED!' : 'OVERTHINK PHANTOM\nAWAKENED!'}
+                  <h2 className="font-pixel text-sm sm:text-base text-white tracking-widest leading-relaxed drop-shadow-[0_0_15px_rgba(216,70,239,0.9)]">
+                    {currentBoss.title}
                   </h2>
-                  <p className="text-[11px] text-red-300 mt-1 font-bold animate-pulse">
-                    {phase === 4 ? 'Do not miss the fatal skill check!' : 'The storm has begun!'}
+                  <p className="text-[11px] text-pink-200 mt-1 font-bold animate-pulse">
+                    {phase === 5 ? 'Thunder rumbles as the ultimate darkness rises!' : 'Do not fail the ambush check!'}
                   </p>
                 </div>
               )}
 
-              {/* FRIDAY THE 13TH FATAL CIRCLE SKILL CHECK MODAL */}
+              {/* STAGE 5 DUAL PARRY MINIGAME */}
+              {showDualParry && (
+                <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+                  <div className="bg-slate-950 border-2 border-purple-500 rounded-2xl p-4 flex flex-col items-center max-w-[280px] w-full text-center shadow-[0_0_25px_rgba(168,85,247,0.7)] animate-shake">
+                    <span className="font-pixel text-[8px] text-purple-300 bg-purple-950 border border-purple-700 px-2.5 py-0.5 rounded-full mb-1 flex items-center gap-1">
+                      ⚡ DEFLECT VOID BEAM!
+                    </span>
+                    <p className="text-[11px] text-slate-200 font-semibold mb-2">
+                      Stop in Blue (Ray) or Pink (Charisse) to parry!
+                    </p>
+
+                    <div className="relative w-12 h-44 bg-slate-950 border-2 border-slate-700 rounded-full overflow-hidden my-1 flex items-center justify-center shadow-inner">
+                      {/* Ray Zone */}
+                      <div className="absolute top-[18%] h-[20%] w-full bg-sky-500/40 border-y-2 border-sky-400 flex items-center justify-center">
+                        <span className="font-pixel text-[6.5px] text-sky-300">RAY</span>
+                      </div>
+
+                      {/* Charisse Zone */}
+                      <div className="absolute top-[62%] h-[20%] w-full bg-pink-500/40 border-y-2 border-pink-400 flex items-center justify-center">
+                        <span className="font-pixel text-[6.5px] text-pink-300">CHARISSE</span>
+                      </div>
+
+                      {/* Moving Needle */}
+                      <div 
+                        className="absolute left-0.5 right-0.5 h-3 bg-yellow-400 border border-white rounded-full shadow-lg shadow-yellow-400/80 transition-none"
+                        style={{ top: `${parryPos}%` }}
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleStopDualParry}
+                      className="w-full mt-2 font-pixel text-[9px] bg-gradient-to-r from-sky-500 via-purple-600 to-pink-500 hover:from-sky-600 hover:to-pink-600 text-white py-3 rounded-xl shadow-lg active:scale-95 transition-all"
+                    >
+                      PARRY BEAM! 🛡️
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Balanced Stage 4 Wheel Dial */}
               {showFatalCircle && (
                 <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
                   <div className="bg-slate-950 border-2 border-red-600 rounded-2xl p-4 flex flex-col items-center max-w-[280px] w-full text-center shadow-[0_0_25px_rgba(239,68,68,0.7)] animate-shake">
-                    <span className="font-pixel text-[8px] text-red-400 bg-red-950 border border-red-700 px-2 py-0.5 rounded-full mb-2 flex items-center gap-1">
-                      <Skull size={11} className="animate-spin" /> FATAL SKILL CHECK!
+                    <span className="font-pixel text-[8px] text-red-400 bg-red-950 border border-red-700 px-2 py-0.5 rounded-full mb-1 flex items-center gap-1">
+                      <Skull size={11} /> AMBUSH DEFENSE!
                     </span>
-                    <p className="text-xs text-white font-bold mb-3">
-                      STOP in the white zone or DIE INSTANTLY!
+                    <p className="text-xs text-white font-bold mb-2">
+                      STOP inside the white marker!
                     </p>
 
-                    {/* Spinning Circle Dial with Target Slice */}
                     <div className="relative w-36 h-36 rounded-full border-4 border-slate-700 flex items-center justify-center overflow-hidden bg-slate-900 shadow-inner">
-                      {/* Fixed Target Sweet Spot */}
                       <div 
                         className="absolute w-full h-full pointer-events-none"
                         style={{
-                          background: `conic-gradient(from ${circleTargetAngle - 14}deg, transparent 0deg, #ffffff 1deg, #ef4444 14deg, #ffffff 28deg, transparent 29deg)`
+                          background: `conic-gradient(from ${circleTargetAngle - 20}deg, transparent 0deg, #ffffff 1deg, #ef4444 20deg, #ffffff 40deg, transparent 41deg)`
                         }}
                       />
 
-                      {/* Rotating Center Needle */}
                       <div 
                         className="absolute w-full h-1 pointer-events-none"
                         style={{
@@ -1378,7 +1607,7 @@ export default function App() {
                       onClick={handleStopFatalCircle}
                       className="w-full mt-3 font-pixel text-[10px] bg-red-600 hover:bg-red-500 text-white py-3 rounded-xl shadow-lg shadow-red-600/50 active:scale-95 transition-all tracking-wider"
                     >
-                      HIT SKILL CHECK! 🎯
+                      STOP DIAL! 🎯
                     </button>
                   </div>
                 </div>
@@ -1419,11 +1648,11 @@ export default function App() {
                     <div className="relative w-14 h-14 flex items-center justify-center mb-2">
                       <div 
                         className="w-12 h-12 rounded-full bg-pink-500/20 border-2 border-pink-400 flex items-center justify-center overflow-hidden transition-all"
-                        style={{ transform: `scale(${1 + (mashCount / (phase === 4 ? 10 : 8)) * 0.2})` }}
+                        style={{ transform: `scale(${1 + (mashCount / 8) * 0.2})` }}
                       >
                         <div 
                           className="absolute bottom-0 w-full bg-gradient-to-t from-pink-600 to-rose-400 transition-all duration-75"
-                          style={{ height: `${(mashCount / (phase === 4 ? 10 : 8)) * 100}%` }}
+                          style={{ height: `${(mashCount / 8) * 100}%` }}
                         />
                         <span className="relative z-10 text-lg animate-pulse">💖</span>
                       </div>
@@ -1440,7 +1669,7 @@ export default function App() {
                       onClick={handleMashTap}
                       className="w-full font-pixel text-[8.5px] bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 py-2.5 rounded-xl shadow-lg shadow-pink-500/30 active:scale-90 transition-transform"
                     >
-                      TAP! TAP! ({mashCount}/{phase === 4 ? 10 : 8}) 💓
+                      TAP! TAP! ({mashCount}/8) 💓
                     </button>
                   </div>
                 </div>
@@ -1556,7 +1785,6 @@ export default function App() {
 
             </div>
 
-            {/* Ineffective / Missed Attack Alert */}
             {attackWarning && (
               <div className="absolute top-12 left-2 right-2 z-30 bg-red-600/95 text-white font-pixel text-[7px] leading-tight px-2.5 py-1.5 rounded-lg border border-red-300 flex items-center justify-center gap-1.5 text-center shadow-2xl animate-bounce">
                 <AlertTriangle size={12} className="shrink-0 text-yellow-300" />
@@ -1564,9 +1792,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Bottom Tactical Deck */}
+            {/* Bottom Deck */}
             <div className="bg-gradient-to-b from-slate-900 via-slate-950 to-black border-t-2 border-slate-700 p-2.5 flex flex-col justify-between shrink-0 gap-1.5">
-              
               <div className="bg-black/80 border border-slate-800 rounded-lg p-1.5 min-h-[34px] flex items-center justify-center text-center">
                 <p className="text-[10.5px] text-pink-100 font-semibold leading-snug">
                   {battleLog}
@@ -1585,7 +1812,7 @@ export default function App() {
                   />
                 </div>
                 <button
-                  disabled={synergy < 100 || isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive}
+                  disabled={synergy < 100 || isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || showDualParry || bossIntro || jumpscareActive}
                   onClick={executeUltimate}
                   className={`font-pixel text-[7px] px-2 py-0.5 rounded transition-all ${
                     synergy >= 100 
@@ -1597,53 +1824,59 @@ export default function App() {
                 </button>
               </div>
 
-              {/* 4-Button Action Grid */}
+              {/* 4-Button Grid */}
               <div className="grid grid-cols-2 gap-1.5">
                 <button
-                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive}
+                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || showDualParry || bossIntro || jumpscareActive}
                   onClick={() => initiateAttack('comm')}
-                  className="bg-pink-600 hover:bg-pink-500 disabled:opacity-40 py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md shadow-pink-600/30 text-left"
+                  className={`py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md text-left ${
+                    dynamicWeakness === 'comm' ? 'bg-pink-600 ring-2 ring-yellow-300 animate-pulse' : 'bg-pink-800/80 hover:bg-pink-700'
+                  }`}
                 >
                   <span className="text-base">💌</span>
                   <div>
                     <div className="font-pixel text-[7px]">COMMUNICATE</div>
-                    <div className="text-[9px] text-pink-200/80">Power of Love</div>
+                    <div className="text-[9px] text-pink-200/80">{dynamicWeakness === 'comm' ? '★ WEAKNESS' : 'Power of Love'}</div>
                   </div>
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive}
+                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || showDualParry || bossIntro || jumpscareActive}
                   onClick={() => initiateAttack('food')}
-                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md shadow-emerald-600/30 text-left"
+                  className={`py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md text-left ${
+                    dynamicWeakness === 'food' ? 'bg-emerald-600 ring-2 ring-yellow-300 animate-pulse' : 'bg-emerald-800/80 hover:bg-emerald-700'
+                  }`}
                 >
                   <span className="text-base">🍔</span>
                   <div>
                     <div className="font-pixel text-[7px]">BURGER & TEA</div>
-                    <div className="text-[9px] text-emerald-200/80">Snack Attack</div>
+                    <div className="text-[9px] text-emerald-200/80">{dynamicWeakness === 'food' ? '★ WEAKNESS' : 'Snack Attack'}</div>
                   </div>
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive}
+                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || showDualParry || bossIntro || jumpscareActive}
                   onClick={() => initiateAttack('hug')}
-                  className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md shadow-purple-600/30 text-left"
+                  className={`py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md text-left ${
+                    dynamicWeakness === 'hug' ? 'bg-purple-600 ring-2 ring-yellow-300 animate-pulse' : 'bg-purple-800/80 hover:bg-purple-700'
+                  }`}
                 >
                   <span className="text-base">🫂</span>
                   <div>
                     <div className="font-pixel text-[7px]">WARM HUG</div>
-                    <div className="text-[9px] text-purple-200/80">Reassurance</div>
+                    <div className="text-[9px] text-purple-200/80">{dynamicWeakness === 'hug' ? '★ WEAKNESS' : 'Reassurance'}</div>
                   </div>
                 </button>
 
                 <button
-                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || finalBossIntro || jumpscareActive}
+                  disabled={isTurnLocked || qteStep || showNeedleMinigame || showTriviaModal || showFatalCircle || showDualParry || bossIntro || jumpscareActive}
                   onClick={executeHeal}
                   className="bg-sky-600 hover:bg-sky-500 disabled:opacity-40 py-2 px-2 rounded-xl flex items-center justify-start gap-1.5 active:scale-95 transition-all shadow-md shadow-sky-600/30 text-left"
                 >
                   <span className="text-base">🧋</span>
                   <div>
                     <div className="font-pixel text-[7px]">WARM MILK TEA</div>
-                    <div className="text-[9px] text-sky-200/80">+30 Team HP</div>
+                    <div className="text-[9px] text-sky-200/80">+35 Team HP</div>
                   </div>
                 </button>
               </div>
@@ -1651,14 +1884,54 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= SCREEN 3: GAME OVER ================= */}
+        {/* ================= SCREEN 3: CINEMATIC EPILOGUE (FREEDOM CUTSCENE) ================= */}
+        {gameState === 'clearing_cutscene' && (
+          <div className="w-full h-full flex flex-col justify-between relative overflow-hidden bg-sky-900 animate-fade-in">
+            <div className="relative flex-1 w-full overflow-hidden">
+              <canvas
+                ref={cutsceneCanvasRef}
+                width={160}
+                height={240}
+                className="w-full h-full"
+                style={{ imageRendering: 'pixelated' }}
+              />
+
+              <div className="absolute top-3 left-3 right-3 flex justify-center">
+                <span className="font-pixel text-[8px] text-yellow-300 bg-black/60 border border-yellow-400 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-lg animate-bounce">
+                  <Sun size={12} className="text-yellow-400" /> THE APOCALYPSE HAS ENDED!
+                </span>
+              </div>
+            </div>
+
+            {/* Narrative Dialogue Box */}
+            <div className="bg-gradient-to-t from-slate-950 via-slate-900 to-transparent p-4 text-center shrink-0 border-t border-yellow-500/40">
+              <h3 className="font-pixel text-xs text-pink-300 mb-1">✨ THE CURSE IS SHATTERED! ✨</h3>
+              <p className="text-[11.5px] text-slate-100 font-medium leading-relaxed max-w-[320px] mx-auto mb-3">
+                The dark blood sky parts as warm golden sunshine touches the valley. Cherry blossoms drift in the breeze. Ray and Charisse step together onto the flower meadow, hand in hand, free from all monsters!
+              </p>
+
+              <button
+                onClick={() => {
+                  initAudio();
+                  playSound(700, 'sine', 0.1);
+                  setGameState('victory');
+                }}
+                className="w-full font-pixel text-[10px] bg-gradient-to-r from-pink-500 via-rose-500 to-yellow-500 hover:from-pink-600 hover:to-yellow-600 text-slate-950 font-bold py-3.5 rounded-xl shadow-lg shadow-pink-500/40 flex items-center justify-center gap-2 active:scale-95 transition-all"
+              >
+                OPEN LOVE LETTERS & ENDING <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================= SCREEN 4: GAME OVER ================= */}
         {gameState === 'gameover' && (
           <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-black/95 animate-fade-in gap-3">
             <Skull size={42} className="text-red-500 animate-bounce" />
             <div>
-              <h2 className="font-pixel text-base text-red-500 tracking-wider">YOU WERE SLAIN</h2>
+              <h2 className="font-pixel text-base text-red-500 tracking-wider">OVERWHELMED BY DARKNESS</h2>
               <p className="text-[11px] text-slate-400 mt-1.5 max-w-[240px] leading-relaxed">
-                The killer was too fast! Watch the circle closely and stop the needle directly on the white marker!
+                The Void Titan overpowered your bond! Read the shifting weaknesses and execute the dual parries together!
               </p>
             </div>
 
@@ -1680,15 +1953,14 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= SCREEN 4: VICTORY & HAPPY REWARD ================= */}
+        {/* ================= SCREEN 5: FINAL VICTORY & REWARDS ================= */}
         {gameState === 'victory' && (
           <div className="w-full h-full flex flex-col items-center justify-between p-3.5 text-center overflow-y-auto">
-            
             <div className="w-full flex flex-col items-center pt-0.5">
               <span className="font-pixel text-[8px] text-yellow-300 bg-yellow-950/70 border border-yellow-600/60 px-3 py-0.5 rounded-full flex items-center gap-1.5 shadow-md animate-bounce">
-                <Trophy size={11} /> 4-STAGE NIGHTMARE CONQUERED!
+                <Trophy size={11} /> ALL 5 TRIALS CLEARED!
               </span>
-              <h2 className="font-pixel text-xs text-pink-200 mt-1.5">TRUE LOVE SURVIVOR UNLOCKED ✨</h2>
+              <h2 className="font-pixel text-xs text-pink-200 mt-1.5">TRUE LOVE SAVED THE WORLD ✨</h2>
               <p className="text-[10px] text-pink-300/80 mt-0.5">Happy 4-Month Anniversary, Charisse! ❤️</p>
             </div>
 
@@ -1713,7 +1985,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Commemorative Victory Scroll */}
+            {/* Official Commemorative Victory Scroll */}
             <div className="w-full max-w-[290px] bg-gradient-to-br from-purple-950 via-slate-900 to-pink-950 border-2 border-pink-500/80 rounded-2xl p-2.5 text-center relative overflow-hidden shadow-xl">
               <div className="flex items-center justify-between text-yellow-300 font-pixel text-[7.5px] mb-1 border-b border-pink-500/30 pb-1">
                 <span className="flex items-center gap-1"><Award size={10} /> 123 DAYS OF LOVE</span>
@@ -1727,7 +1999,7 @@ export default function App() {
               </div>
 
               <p className="text-[10.5px] text-slate-200 font-medium leading-relaxed px-1 mt-0.5">
-                Not even blood rain, dark phantoms, or lethal killers could break our bond. Thank you for being the sweetest partner, best gaming companion, and love of my life!
+                Through thunder, void storms, and fears, nothing could ever dim our love. Thank you for being my favorite person, best gamer, and dream partner. Here's to forever together!
               </p>
 
               <div className="mt-1.5 font-pixel text-[8px] text-emerald-400 bg-emerald-950/70 border border-emerald-500/60 py-1 px-1.5 rounded-lg">
@@ -1739,9 +2011,8 @@ export default function App() {
               onClick={() => resetCampaign(false)}
               className="text-[9.5px] text-pink-300/70 hover:text-white flex items-center gap-1 py-0.5 mt-0.5"
             >
-              <RefreshCw size={11} /> Play Nightmare Again
+              <RefreshCw size={11} /> Play Full Quest Again
             </button>
-
           </div>
         )}
 
