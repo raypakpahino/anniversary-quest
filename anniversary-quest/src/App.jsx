@@ -4,16 +4,17 @@ import {
   Trophy, Sparkles, HelpCircle, X, ArrowRight, 
   ShieldCheck, Zap, RefreshCw, Award, AlertTriangle, 
   Skull, HeartPulse, Volume2, VolumeX, Heart, ArrowLeft, ArrowUp, ArrowDown,
-  Sun, Shield, Wind, Sparkle, Flame, BookOpen
+  Sun, Shield, Wind, Sparkle, Flame, BookOpen, Swords
 } from 'lucide-react';
 
 export default function App() {
   const [gameState, setGameState] = useState('landing'); // 'landing' | 'instructions' | 'battle' | 'cutscene' | 'victory' | 'gameover'
   const [isMuted, setIsMuted] = useState(false);
   
-  // Combat System (5 Stages)
+  // Progressive Combat Scaling
   const [phase, setPhase] = useState(1);
   const [bossHp, setBossHp] = useState(100);
+  const [bossMaxHp, setBossMaxHp] = useState(100);
   const [playerHp, setPlayerHp] = useState(100);
   const [synergy, setSynergy] = useState(0);
   const [currentWeakness, setCurrentWeakness] = useState('comm');
@@ -29,12 +30,12 @@ export default function App() {
   const [cutsceneCharsFaded, setCutsceneCharsFaded] = useState(false);
 
   // Multi-Tier QTE Attack States
-  const [qteStep, setQteStep] = useState(null); // 'timed' | 'mash' | 'swipe' | null
+  const [qteStep, setQteStep] = useState(null);
   const [qteScale, setQteScale] = useState(2.3);
   const [mashCount, setMashCount] = useState(0);
   const [mashTimer, setMashTimer] = useState(100);
 
-  // Injustice Directional Swipe Sequence
+  // Directional Swipe Sequence
   const [requiredSwipe, setRequiredSwipe] = useState('LEFT');
   const [swipeTimer, setSwipeTimer] = useState(100);
   const [touchStartPos, setTouchStartPos] = useState(null);
@@ -54,21 +55,23 @@ export default function App() {
 
   const [pendingAction, setPendingAction] = useState(null);
 
-  // Emergency Recovery Needle & Trivia (Triggers comfortably at <= 55% HP)
+  // Emergency Recovery Needle & Trivia
   const [showNeedleMinigame, setShowNeedleMinigame] = useState(false);
   const [needlePos, setNeedlePos] = useState(50);
   const [showTriviaModal, setShowTriviaModal] = useState(false);
   const [currentTriviaIndex, setCurrentTriviaIndex] = useState(0);
 
-  // VFX & Screenshake
+  // VFX
   const [screenShake, setScreenShake] = useState(false);
   const [bossFlash, setBossFlash] = useState(false);
   const [activePolaroid, setActivePolaroid] = useState(0);
 
+  // Canvas VFX Engine
   const animRef = useRef({
     p1Offset: { x: 0, y: 0 },
     p2Offset: { x: 0, y: 0 },
     bossOffset: { x: 0, y: 0 },
+    slashEffects: [], // { type: 'cerce'|'ray'|'dual', x, y, frame, maxFrames }
     cutsceneWalkOffset: 0,
     floatingTexts: [],
     rainDrops: [],
@@ -92,30 +95,40 @@ export default function App() {
       name: "EGO MONSTER",
       title: "STAGE 1: THE EGO MONSTER",
       baseWeakness: "comm",
+      maxHp: 100,
+      damage: 14,
       defaultHint: "Honest communication melts his stubborn pride!"
     },
     {
       name: "HANGRY GOBLIN",
       title: "STAGE 2: THE HANGRY GOBLIN",
       baseWeakness: "food",
+      maxHp: 130,
+      damage: 20,
       defaultHint: "Feed him delicious treats and sweet milk tea!"
     },
     {
       name: "OVERTHINK PHANTOM",
       title: "STAGE 3: OVERTHINK PHANTOM",
       baseWeakness: "hug",
+      maxHp: 160,
+      damage: 26,
       defaultHint: "Warm hugs and pure reassurance calm the spiral!"
     },
     {
       name: "DREAD DEVOURER",
       title: "STAGE 4: DREAD DEVOURER",
       baseWeakness: "comm",
+      maxHp: 200,
+      damage: 32,
       defaultHint: "Unbreakable trust and love conquer fear!"
     },
     {
       name: "ABYSS VOID TITAN ⚡",
       title: "FINAL STAGE: ABYSS VOID TITAN",
       baseWeakness: "hug",
+      maxHp: 260,
+      damage: 40,
       defaultHint: "Hold each other close through the storm!"
     }
   ];
@@ -141,6 +154,8 @@ export default function App() {
   const currentBoss = bosses[phase - 1] || bosses[0];
 
   useEffect(() => {
+    setBossMaxHp(currentBoss.maxHp);
+    setBossHp(currentBoss.maxHp);
     setCurrentWeakness(currentBoss.baseWeakness);
     setIsSurpriseWeakness(false);
   }, [phase]);
@@ -148,7 +163,7 @@ export default function App() {
   // Rain and Blossom Petal Initializers
   useEffect(() => {
     const drops = [];
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < 75; i++) {
       drops.push({
         x: Math.random() * 160,
         y: Math.random() * 240,
@@ -195,6 +210,27 @@ export default function App() {
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + dur);
+    } catch {
+      // Audio safety
+    }
+  };
+
+  const playSlashSound = () => {
+    if (isMuted) return;
+    try {
+      initAudio();
+      const ctx = audioCtxRef.current;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(800, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.18);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.18);
     } catch {
       // Audio safety
     }
@@ -291,7 +327,7 @@ export default function App() {
       waveType = 'sine';
     } else if (phase === 5) {
       notes = melodyStage5Abyss;
-      tempo = 115;
+      tempo = 110;
       waveType = 'sawtooth';
     } else if (phase === 4 || phase === 3) {
       notes = melodyDarkStages;
@@ -312,6 +348,17 @@ export default function App() {
 
   const addFloatingText = (text, x, y, color = '#facc15') => {
     animRef.current.floatingTexts.push({ text, x, y, color, life: 40 });
+  };
+
+  const triggerSlashVFX = (type, x, y) => {
+    playSlashSound();
+    animRef.current.slashEffects.push({
+      type,
+      x,
+      y,
+      frame: 0,
+      maxFrames: 14
+    });
   };
 
   // Emergency Recovery Needle Animation
@@ -343,7 +390,7 @@ export default function App() {
     circleAngleRef.current = 0;
 
     const loop = () => {
-      circleAngleRef.current = (circleAngleRef.current + 4.2) % 360;
+      circleAngleRef.current = (circleAngleRef.current + 4.5) % 360;
       setCircleAngle(circleAngleRef.current);
       circleAnimRef.current = requestAnimationFrame(loop);
     };
@@ -366,7 +413,7 @@ export default function App() {
 
     const currentDeg = circleAngleRef.current;
     const target = circleTargetAngle;
-    const tolerance = 35; // 70-degree sweet spot
+    const tolerance = 32;
 
     const diff = Math.abs(currentDeg - target);
     const isSuccess = diff <= tolerance || (360 - diff) <= tolerance;
@@ -402,7 +449,7 @@ export default function App() {
     playSound(380, 'sine', 0.15);
 
     const start = Date.now();
-    const duration = 1400;
+    const duration = 1350;
 
     if (parryTimerRef.current) clearInterval(parryTimerRef.current);
 
@@ -429,6 +476,7 @@ export default function App() {
       playSound(900, 'triangle', 0.25);
       setBossFlash(true);
       setScreenShake(true);
+      triggerSlashVFX('dual', 105, 50);
       setTimeout(() => {
         setBossFlash(false);
         setScreenShake(false);
@@ -436,7 +484,7 @@ export default function App() {
 
       addFloatingText("MATRIX PARRY! 🛡️", 35, 110, '#38bdf8');
       setBattleLog("✨ Ray & Charisse parried the incoming strike together!");
-      setSynergy((prev) => Math.min(100, prev + 35));
+      setSynergy((prev) => Math.min(100, prev + 40));
       setIsTurnLocked(false);
     } else {
       handleParryFailure();
@@ -448,7 +496,7 @@ export default function App() {
     setShowParryModal(false);
     playSound(140, 'sawtooth', 0.3);
     
-    const damage = 25;
+    const damage = 28;
     const remainingHp = Math.max(0, playerHp - damage);
     setPlayerHp(remainingHp);
     addFloatingText(`-${damage} HP`, 35, 120, '#ef4444');
@@ -468,7 +516,7 @@ export default function App() {
     setDodgeTimer(100);
 
     const start = Date.now();
-    const duration = 1800;
+    const duration = 1700;
 
     if (dodgeTimerRef.current) clearInterval(dodgeTimerRef.current);
 
@@ -480,7 +528,7 @@ export default function App() {
       if (remaining <= 0) {
         clearInterval(dodgeTimerRef.current);
         setShowDodgeModal(false);
-        const dmg = 25;
+        const dmg = 26;
         const remainingHp = Math.max(0, playerHp - dmg);
         setPlayerHp(remainingHp);
         addFloatingText(`-${dmg} HP`, 35, 120, '#ef4444');
@@ -500,7 +548,7 @@ export default function App() {
     setIsTurnLocked(false);
   };
 
-  // Detailed Environmental Drawing Helpers
+  // Environmental Drawing Helpers
   const drawPineTree = (ctx, x, y, scale = 1, mood = 'cute') => {
     const isCorrupt = mood === 'dark' || mood === 'apocalypse';
     ctx.fillStyle = isCorrupt ? (mood === 'apocalypse' ? '#0a0005' : '#1a0505') : '#3e2723';
@@ -617,7 +665,7 @@ export default function App() {
     ctx.fillRect(x + 19, y + 5, 2, 12);
   };
 
-  // Main Canvas Render Loop
+  // Main Canvas Render Loop with Dynamic Layout Shifts & Visual VFX
   useEffect(() => {
     if (gameState !== 'battle') return;
     const canvas = canvasRef.current;
@@ -632,12 +680,13 @@ export default function App() {
       tick++;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Distinct Sky Gradients & Themes
       const skyGradients = [
-        ['#38bdf8', '#0284c7'], // Stage 1: Cute Sunny Blue
-        ['#0284c7', '#0f766e'], // Stage 2: Cozy Emerald Teal
-        ['#1e1b4b', '#312e81'], // Stage 3: Rainy Twilight
-        ['#280205', '#0c0002'], // Stage 4: Dark Bloody Mist
-        ['#08000f', '#240026']  // Stage 5: Void Apocalypse
+        ['#38bdf8', '#0284c7'], // Stage 1: Sunny Meadow
+        ['#f97316', '#0f766e'], // Stage 2: Sunset Canyon
+        ['#1e1b4b', '#312e81'], // Stage 3: Rainy Twilight Peak
+        ['#280205', '#0c0002'], // Stage 4: Blood Fog Forest
+        ['#08000f', '#240026']  // Stage 5: Void Abyss Rift
       ];
       const curSky = skyGradients[phase - 1] || skyGradients[0];
       const skyGrad = ctx.createLinearGradient(0, 0, 0, 100);
@@ -648,38 +697,115 @@ export default function App() {
 
       const mood = phase >= 5 ? 'apocalypse' : (phase >= 3 ? 'dark' : 'cute');
 
-      drawPineTree(ctx, 4, 42, 0.9, mood);
-      drawPineTree(ctx, 22, 38, 1.1, mood);
-      drawPineTree(ctx, 60, 36, 1.0, mood);
-      drawPineTree(ctx, 134, 40, 0.95, mood);
+      // Arena Layout Shifts per Stage
+      if (phase === 1) {
+        drawPineTree(ctx, 4, 42, 0.9, mood);
+        drawPineTree(ctx, 22, 38, 1.1, mood);
+        drawPineTree(ctx, 60, 36, 1.0, mood);
+        drawPineTree(ctx, 134, 40, 0.95, mood);
 
-      ctx.fillStyle = phase >= 4 ? '#180205' : (phase === 3 ? '#0a0512' : '#14532d');
-      ctx.beginPath();
-      ctx.moveTo(0, 95);
-      ctx.lineTo(160, 65);
-      ctx.lineTo(160, 240);
-      ctx.lineTo(0, 240);
-      ctx.fill();
+        ctx.fillStyle = '#14532d';
+        ctx.beginPath();
+        ctx.moveTo(0, 95);
+        ctx.lineTo(160, 65);
+        ctx.lineTo(160, 240);
+        ctx.lineTo(0, 240);
+        ctx.fill();
 
-      ctx.fillStyle = phase >= 4 ? '#100104' : (phase === 3 ? '#1e1b2e' : '#334155');
-      ctx.beginPath();
-      ctx.moveTo(20, 120);
-      ctx.lineTo(145, 90);
-      ctx.lineTo(135, 215);
-      ctx.lineTo(10, 215);
-      ctx.fill();
+        ctx.fillStyle = '#334155';
+        ctx.beginPath();
+        ctx.moveTo(20, 120);
+        ctx.lineTo(145, 90);
+        ctx.lineTo(135, 215);
+        ctx.lineTo(10, 215);
+        ctx.fill();
 
-      drawMossyRock(ctx, 6, 98, 18, 11, mood);
-      drawMossyRock(ctx, 136, 175, 16, 9, mood);
-      if (phase <= 2) {
         drawFlowerTuft(ctx, 12, 145, '#f43f5e');
         drawFlowerTuft(ctx, 138, 115, '#fbbf24');
         drawFlowerTuft(ctx, 128, 205, '#ec4899');
         drawFlowerTuft(ctx, 22, 220, '#60a5fa');
+      } else if (phase === 2) {
+        // Canyon Rocks
+        drawMossyRock(ctx, 10, 70, 34, 20, mood);
+        drawMossyRock(ctx, 120, 75, 28, 16, mood);
+
+        ctx.fillStyle = '#78350f';
+        ctx.beginPath();
+        ctx.moveTo(0, 85);
+        ctx.lineTo(160, 95);
+        ctx.lineTo(160, 240);
+        ctx.lineTo(0, 240);
+        ctx.fill();
+
+        ctx.fillStyle = '#b45309';
+        ctx.beginPath();
+        ctx.moveTo(15, 110);
+        ctx.lineTo(145, 110);
+        ctx.lineTo(130, 230);
+        ctx.lineTo(30, 230);
+        ctx.fill();
+      } else if (phase === 3) {
+        // High Peak Cliffs
+        drawPineTree(ctx, 6, 32, 1.0, mood);
+        drawPineTree(ctx, 136, 36, 0.9, mood);
+
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.moveTo(-10, 80);
+        ctx.lineTo(80, 50);
+        ctx.lineTo(170, 90);
+        ctx.lineTo(170, 240);
+        ctx.lineTo(-10, 240);
+        ctx.fill();
+
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.moveTo(25, 130);
+        ctx.lineTo(135, 95);
+        ctx.lineTo(125, 215);
+        ctx.lineTo(15, 215);
+        ctx.fill();
+      } else if (phase === 4) {
+        // Blood Mist Twisted Woods
+        drawPineTree(ctx, 2, 40, 1.1, mood);
+        drawPineTree(ctx, 24, 34, 0.95, mood);
+        drawPineTree(ctx, 130, 42, 1.05, mood);
+
+        ctx.fillStyle = '#180205';
+        ctx.beginPath();
+        ctx.moveTo(0, 95);
+        ctx.lineTo(160, 65);
+        ctx.lineTo(160, 240);
+        ctx.lineTo(0, 240);
+        ctx.fill();
+
+        ctx.fillStyle = '#3f070e';
+        ctx.beginPath();
+        ctx.moveTo(20, 120);
+        ctx.lineTo(145, 90);
+        ctx.lineTo(135, 215);
+        ctx.lineTo(10, 215);
+        ctx.fill();
+      } else {
+        // Stage 5: Shattered Void Islands & Tentacles
+        ctx.fillStyle = '#1e0024';
+        ctx.beginPath();
+        ctx.ellipse(80, 190, 65, 24, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.ellipse(115, 65, 38, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glowing Void Tentacles
+        ctx.fillStyle = '#581c87';
+        ctx.fillRect(8, 70 + Math.sin(tick * 0.1) * 8, 6, 45);
+        ctx.fillRect(146, 75 + Math.cos(tick * 0.1) * 8, 6, 45);
       }
 
+      // Boss Display
       const bob = Math.sin(tick * 0.1) * (phase >= 4 ? 4 : 2);
-      const bX = 96 + animRef.current.bossOffset.x;
+      const bX = (phase === 2 ? 88 : 96) + animRef.current.bossOffset.x;
       const bY = 34 + animRef.current.bossOffset.y + bob;
 
       if (bossFlash) {
@@ -720,6 +846,7 @@ export default function App() {
           ctx.fillRect(bX + 11, bY + 10, 3, 3);
           ctx.fillRect(bX + 27, bY + 10, 3, 3);
         } else {
+          // Boss 5: Void Titan
           ctx.fillStyle = '#1e0024';
           ctx.fillRect(bX - 8, bY - 12, 56, 56);
           ctx.fillStyle = '#4a0058';
@@ -744,6 +871,66 @@ export default function App() {
       const p1Y = 138 + animRef.current.p1Offset.y;
       drawCuteCharisse(ctx, p1X, p1Y);
 
+      // RENDER ATTACK SLASH VFX
+      const slashes = animRef.current.slashEffects;
+      for (let i = slashes.length - 1; i >= 0; i--) {
+        const s = slashes[i];
+        ctx.save();
+        if (s.type === 'cerce') {
+          // Cerce Pink Starlight Crescent Slash
+          ctx.strokeStyle = '#f472b6';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, 14 + s.frame * 2.2, Math.PI * 0.7, Math.PI * 1.6);
+          ctx.stroke();
+
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, 12 + s.frame * 2.2, Math.PI * 0.75, Math.PI * 1.55);
+          ctx.stroke();
+        } else if (s.type === 'ray') {
+          // Ray Golden Blue Thunder Cross-Slash
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 3.5;
+          ctx.beginPath();
+          ctx.moveTo(s.x - 18, s.y - 18);
+          ctx.lineTo(s.x + 18, s.y + 18);
+          ctx.moveTo(s.x + 18, s.y - 18);
+          ctx.lineTo(s.x - 18, s.y + 18);
+          ctx.stroke();
+
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(s.x - 14, s.y - 14);
+          ctx.lineTo(s.x + 14, s.y + 14);
+          ctx.moveTo(s.x + 14, s.y - 14);
+          ctx.lineTo(s.x - 14, s.y + 14);
+          ctx.stroke();
+        } else if (s.type === 'dual') {
+          // Dual Starlight Sky Finisher (Golden Star Burst)
+          ctx.fillStyle = s.frame % 2 === 0 ? 'rgba(254, 240, 138, 0.7)' : 'rgba(244, 114, 182, 0.7)';
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.frame * 3.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.5;
+          for (let ray = 0; ray < 6; ray++) {
+            const angle = ray * (Math.PI / 3);
+            ctx.beginPath();
+            ctx.moveTo(s.x, s.y);
+            ctx.lineTo(s.x + Math.cos(angle) * (s.frame * 4), s.y + Math.sin(angle) * (s.frame * 4));
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+
+        s.frame++;
+        if (s.frame >= s.maxFrames) slashes.splice(i, 1);
+      }
+
       // Rain / Blood Weather
       if (phase >= 3) {
         ctx.strokeStyle = phase >= 4 ? 'rgba(239, 68, 68, 0.7)' : 'rgba(186, 230, 253, 0.45)';
@@ -762,8 +949,8 @@ export default function App() {
           }
         });
 
-        if (phase === 5 && Math.random() < 0.04) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        if (phase === 5 && Math.random() < 0.05) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
           ctx.fillRect(0, 0, 160, 240);
         }
       }
@@ -1015,24 +1202,27 @@ export default function App() {
   };
 
   const executeSwipeSuccess = (currentDir) => {
+    const bX = 100;
+    const bY = 45;
+
     if (currentDir === 'LEFT') {
-      playSound(680, 'triangle', 0.15);
+      triggerSlashVFX('cerce', bX, bY);
       setBossFlash(true);
       setTimeout(() => setBossFlash(false), 120);
-      addFloatingText("CHARISSE STRIKE! 💥", 40, 130, '#f472b6');
-      setBattleLog("⚔️ Charisse charges in with a starlight strike!");
-      setTimeout(() => startDirectionalSwipe('RIGHT'), 200);
+      addFloatingText("CERCE CRESCENT SLASH! 🌙", 25, 125, '#f472b6');
+      setBattleLog("⚔️ Cerce sweeps in with a glowing crescent slash!");
+      setTimeout(() => startDirectionalSwipe('RIGHT'), 220);
     } else if (currentDir === 'RIGHT') {
-      playSound(780, 'triangle', 0.15);
+      triggerSlashVFX('ray', bX + 6, bY);
       setBossFlash(true);
       setTimeout(() => setBossFlash(false), 120);
-      addFloatingText("RAY CROSS-SLASH! 🔥", 55, 125, '#38bdf8');
-      setBattleLog("⚡ Ray dashes in with a piercing cross-slash!");
-      setTimeout(() => startDirectionalSwipe('UP_OR_DOWN'), 200);
+      addFloatingText("RAY CROSS-SLASH! ⚡", 35, 120, '#38bdf8');
+      setBattleLog("⚡ Ray dashes in with a piercing thunder cross-blade!");
+      setTimeout(() => startDirectionalSwipe('UP_OR_DOWN'), 220);
     } else if (currentDir === 'UP_OR_DOWN') {
-      playSound(920, 'triangle', 0.25);
-      addFloatingText("DUAL SKY FINISHER! ⚡", 45, 115, '#facc15');
-      setBattleLog("🌟 Charisse & Ray execute their synchronized team finisher!");
+      triggerSlashVFX('dual', bX, bY);
+      addFloatingText("DUAL STARLIGHT FINISHER! ✨", 25, 110, '#facc15');
+      setBattleLog("🌟 Cerce & Ray synchronize for the final starlight blast!");
       resolveTurn(pendingAction, true);
     }
   };
@@ -1068,13 +1258,13 @@ export default function App() {
       setScreenShake(false);
     }, 350);
 
-    const baseDmg = isCrit ? (phase === 5 ? 40 : 50) : 30;
+    const baseDmg = isCrit ? (phase === 5 ? 42 : 50) : 28;
     playSound(isCrit ? 700 : 500, 'triangle', 0.15);
     addFloatingText(isCrit ? `CRIT! -${baseDmg}` : `-${baseDmg}`, 95, 30, isCrit ? '#f43f5e' : '#facc15');
 
     const nextBossHp = Math.max(0, bossHp - baseDmg);
     setBossHp(nextBossHp);
-    setSynergy((prev) => Math.min(100, prev + (isCrit ? 40 : 25)));
+    setSynergy((prev) => Math.min(100, prev + (isCrit ? 35 : 22)));
     setBattleLog("💥 Direct hit broke right through!");
 
     if (nextBossHp <= 0) {
@@ -1120,6 +1310,7 @@ export default function App() {
 
     setBossFlash(true);
     setScreenShake(true);
+    triggerSlashVFX('dual', 100, 45);
     addFloatingText("DUO STRIKE! -75", 85, 25, '#ec4899');
     setTimeout(() => {
       setBossFlash(false);
@@ -1142,12 +1333,12 @@ export default function App() {
     setScreenShake(true);
     setTimeout(() => setScreenShake(false), 300);
 
-    // Guaranteed trigger paths for specific mechanics
+    // Guaranteed Triggering of Key Defenses
     if (phase === 5 && Math.random() < 0.65) {
       setTimeout(() => triggerMatrixParry(), 400);
       return;
     }
-    if (phase === 4 && (bossHp <= 70 || Math.random() < 0.65)) {
+    if (phase === 4 && (bossHp <= 140 || Math.random() < 0.65)) {
       setTimeout(() => triggerFatalCircle(), 400);
       return;
     }
@@ -1156,7 +1347,7 @@ export default function App() {
       return;
     }
 
-    const damage = (isHeavyHit ? 28 : 18) + (phase * 3);
+    const damage = (isHeavyHit ? currentBoss.damage + 8 : currentBoss.damage);
     const remainingHp = Math.max(0, playerHp - damage);
     setPlayerHp(remainingHp);
     addFloatingText(`-${damage} HP`, 35, 140, '#ef4444');
@@ -1220,7 +1411,6 @@ export default function App() {
     if (phase < 5) {
       const nextPhase = phase + 1;
       setPhase(nextPhase);
-      setBossHp(100);
       setPlayerHp((p) => Math.min(100, p + 35));
       setAttackWarning("");
 
@@ -1258,6 +1448,7 @@ export default function App() {
         setIsTurnLocked(false);
       }
     } else {
+      // VICTORY: TRIGGER ROMANTIC SUNSET CUTSCENE
       setIsTurnLocked(true);
       playRomanticChiptune();
       confetti({ particleCount: 160, spread: 90, origin: { y: 0.6 } });
@@ -1270,6 +1461,7 @@ export default function App() {
   const resetCampaign = (toMainMenu = false) => {
     setPhase(1);
     setBossHp(100);
+    setBossMaxHp(100);
     setPlayerHp(100);
     setSynergy(0);
     setCurrentWeakness('comm');
@@ -1293,7 +1485,7 @@ export default function App() {
     }
   };
 
-  // Preserved Personal Love Letters
+  // Preserved Love Letters
   const polaroids = [
     {
       caption: "Thank You for Healing My Knee 🩹",
@@ -1316,7 +1508,7 @@ export default function App() {
     <div className="w-full h-[100dvh] flex items-center justify-center font-cozy text-white select-none bg-black overflow-hidden p-0">
       <div className={`w-full max-w-[430px] h-full flex flex-col justify-between relative bg-slate-950 border-x border-slate-800 shadow-2xl overflow-hidden ${screenShake ? 'animate-shake' : ''}`}>
 
-        {/* ================= SCREEN 1: NEW TITLED LANDING PAGE ================= */}
+        {/* ================= SCREEN 1: TITLE SCREEN ================= */}
         {gameState === 'landing' && (
           <div className="w-full h-full flex flex-col justify-between p-4 sm:p-5 text-center overflow-hidden">
             <div className="w-full flex justify-between items-center shrink-0 pt-0.5">
@@ -1348,7 +1540,7 @@ export default function App() {
                   <span className="text-amber-300 text-xs tracking-widest">4-MONTH ANNIVERSARY QUEST</span>
                 </h1>
                 <p className="text-[11px] text-pink-300/80 mt-1">
-                  123 Days of Love • 5 Epic Boss Battles
+                  123 Days of Love • 5 Scaled Trials
                 </p>
               </div>
 
@@ -1362,7 +1554,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* 2 Big Buttons: Start Quest & Rules Page */}
+            {/* Title Buttons */}
             <div className="w-full shrink-0 flex flex-col gap-2 pt-2 pb-1">
               <button
                 onClick={() => {
@@ -1407,8 +1599,8 @@ export default function App() {
 
             <div className="space-y-3 text-xs text-slate-200 my-auto py-3 leading-relaxed">
               <div className="bg-purple-950/60 p-2.5 rounded-xl border border-purple-800/60">
-                <p className="font-bold text-pink-300 text-[11px] mb-0.5">⚔️ PRIMARY COUNTERS & CRAVINGS</p>
-                <p className="text-[11px]">Monsters are mostly weak to their signature weakness, but watch for surprise glowing mood cravings!</p>
+                <p className="font-bold text-pink-300 text-[11px] mb-0.5">⚔️ COMBAT SCALING & VISUAL VFX</p>
+                <p className="text-[11px]">Each stage scales up in monster HP and damage! Cerce unleashes crescent blade slashes while Ray cuts through with thunder cross-beams.</p>
               </div>
 
               <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 space-y-1.5 text-[11px]">
@@ -1465,12 +1657,12 @@ export default function App() {
               <div className="absolute top-2 right-2 border p-1.5 px-2 rounded-lg min-w-[150px] shadow-lg z-30 bg-black/85 border-slate-700">
                 <div className="flex justify-between items-center gap-2 font-pixel text-[7.5px] text-pink-300 mb-0.5 whitespace-nowrap">
                   <span className="tracking-tight">{currentBoss.name}</span>
-                  <span className="text-[7px] text-slate-300">{bossHp}%</span>
+                  <span className="text-[7px] text-slate-300">{bossHp}/{bossMaxHp}</span>
                 </div>
                 <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                   <div 
                     className="bg-gradient-to-r from-rose-500 to-pink-500 h-full transition-all duration-300"
-                    style={{ width: `${bossHp}%` }}
+                    style={{ width: `${(bossHp / bossMaxHp) * 100}%` }}
                   />
                 </div>
               </div>
@@ -1731,7 +1923,7 @@ export default function App() {
                     </div>
 
                     <p className="text-[10px] text-cyan-200/90 mb-2">
-                      {requiredSwipe === 'LEFT' ? '1/3: Charisse Solo Lunge' : requiredSwipe === 'RIGHT' ? '2/3: Ray Cross-Slash' : '3/3: Synchronized Final Strike!'}
+                      {requiredSwipe === 'LEFT' ? '1/3: Cerce Starlight Crescent' : requiredSwipe === 'RIGHT' ? '2/3: Ray Thunder Cross-Slash' : '3/3: Synchronized Starlight Burst!'}
                     </p>
 
                     <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-1">
